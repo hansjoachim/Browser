@@ -53,7 +53,7 @@ class Tokenizer(page: String) {
                     tokenize(TokenizationState.EndTagOpenState)
                 } else if (isAlphabetic(consumedCharacter.code)) {
                     //FIXME: parse tags
-                    currentToken = Token.StartTagToken("")
+                    currentToken = Token.StartTagToken()
 
                     //Reconsume in the tag name state.
                     inputStream.reset()
@@ -114,7 +114,9 @@ class Tokenizer(page: String) {
             TokenizationState.TagNameState -> {
                 val consumedCharacter = consumeCharacter()
 
-                if (consumedCharacter == '>') {
+                if (isWhitespace(consumedCharacter)) {
+                    tokenize(TokenizationState.BeforeAttributeNameState)
+                } else if (consumedCharacter == '>') {
                     emitCurrentToken()
                     tokenize(TokenizationState.DataState)
                 } else if (isAlphabetic(consumedCharacter.code)) {
@@ -124,6 +126,54 @@ class Tokenizer(page: String) {
                     tokenize(TokenizationState.TagNameState)
                 } else {
                     unhandledCase(TokenizationState.TagNameState, consumedCharacter)
+                }
+            }
+            TokenizationState.BeforeAttributeNameState -> {
+                inputStream.mark(1)
+                val consumedCharacter = consumeCharacter()
+
+                if (isWhitespace(consumedCharacter)) {
+                    tokenize(TokenizationState.BeforeAttributeNameState)
+                } else {
+                    inputStream.reset()
+                    //reconsume
+                    (currentToken as Token.TagToken).attributes.add(Token.Attribute())
+                    tokenize(TokenizationState.AttributeNameState)
+                }
+            }
+            TokenizationState.AttributeNameState -> {
+                val consumedCharacter = consumeCharacter()
+
+                if (consumedCharacter == '=') {
+                    tokenize(TokenizationState.BeforeAttributeValueState)
+                } else {
+                    //FIXME: horrible hack until I can point to current attribute
+                    //Let's hope no one use more that one attribute per tag ;)
+                    (currentToken as Token.TagToken).attributes[0].attributeName += consumedCharacter
+                    tokenize(TokenizationState.AttributeNameState)
+                }
+            }
+            TokenizationState.BeforeAttributeValueState -> {
+                inputStream.mark(1)
+                val consumedCharacter = consumeCharacter()
+
+                //FIXME: lets hope no one use quotes :|
+
+                inputStream.reset()
+                //reconsume
+                tokenize(TokenizationState.AttributeValueUnquotedState)
+            }
+            TokenizationState.AttributeValueUnquotedState -> {
+                val consumedCharacter = consumeCharacter()
+
+                if (consumedCharacter == '>') {
+                    emitCurrentToken()
+                    tokenize(TokenizationState.DataState)
+                } else {
+                    //FIXME: horrible hack until I can point to current attribute
+                    //Let's hope no one use more that one attribute per tag ;)
+                    (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
+                    tokenize(TokenizationState.AttributeValueUnquotedState)
                 }
             }
             TokenizationState.EndTagOpenState -> {
@@ -189,7 +239,7 @@ class Tokenizer(page: String) {
         return inputStream.available() > 0
     }
 
-    private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char=' ') {
+    private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char = ' ') {
         println("Unhandled case in $state: $unhandledCharacter")
     }
 
