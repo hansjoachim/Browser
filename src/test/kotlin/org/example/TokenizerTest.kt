@@ -86,4 +86,31 @@ class TokenizerTest {
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
+
+    @Test
+    fun should_parse_tags_with_numbers_in_names() {
+        val simpleExample = "<!DOCTYPE html><html><h1>My title</h1></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            Token.DOCTYPEToken("html"),
+            Token.StartTagToken("html"),
+            Token.StartTagToken("h1"),
+            Token.CharacterToken('M'),
+            Token.CharacterToken('y'),
+            Token.CharacterToken(' '),
+            Token.CharacterToken('t'),
+            Token.CharacterToken('i'),
+            Token.CharacterToken('t'),
+            Token.CharacterToken('l'),
+            Token.CharacterToken('e'),
+            Token.EndTagToken("h1"),
+            Token.EndTagToken("html"),
+            Token.EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
 }

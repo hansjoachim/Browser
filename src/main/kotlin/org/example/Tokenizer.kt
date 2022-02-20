@@ -2,8 +2,7 @@ package org.example
 
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
-import java.lang.Character.isAlphabetic
-import java.lang.Character.isWhitespace
+import java.lang.Character.*
 import kotlin.text.Charsets.UTF_8
 
 class Tokenizer(page: String) {
@@ -119,13 +118,14 @@ class Tokenizer(page: String) {
                 } else if (consumedCharacter == '>') {
                     emitCurrentToken()
                     tokenize(TokenizationState.DataState)
-                } else if (isAlphabetic(consumedCharacter.code)) {
-                    //FIXME: lowercase name
-                    (currentToken as Token.TagToken).tagName += consumedCharacter
+                } else if (isUpperCase(consumedCharacter.code)) {
+                    (currentToken as Token.TagToken).tagName += toLowerCase(consumedCharacter)
                     //Hm... loop automatically?
                     tokenize(TokenizationState.TagNameState)
                 } else {
-                    unhandledCase(TokenizationState.TagNameState, consumedCharacter)
+                    (currentToken as Token.TagToken).tagName += consumedCharacter
+                    //Hm... loop automatically?
+                    tokenize(TokenizationState.TagNameState)
                 }
             }
             TokenizationState.BeforeAttributeNameState -> {
