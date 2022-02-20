@@ -37,6 +37,10 @@ class Tokenizer(page: String) {
 
                 if (consumedCharacter == '<') {
                     tokenize(TokenizationState.TagOpenState)
+                } else {
+                    currentToken = Token.CharacterToken(consumedCharacter)
+                    emitCurrentToken()
+                    tokenize(TokenizationState.DataState)
                 }
             }
             TokenizationState.TagOpenState -> {
@@ -54,7 +58,6 @@ class Tokenizer(page: String) {
                     //Reconsume in the tag name state.
                     inputStream.reset()
                     tokenize(TokenizationState.TagNameState)
-
                 } else {
                     unhandledCase(TokenizationState.TagOpenState, consumedCharacter)
                 }
