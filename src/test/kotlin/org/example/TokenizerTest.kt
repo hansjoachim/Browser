@@ -6,7 +6,7 @@ import org.junit.Test
 class TokenizerTest {
 
     @Test
-    fun should_parse_simple_example() {
+    fun should_tokenize_simple_example() {
         val simpleExample = "<!DOCTYPE html><html><body></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
@@ -25,7 +25,7 @@ class TokenizerTest {
     }
 
     @Test
-    fun should_parse_simple_example_with_text() {
+    fun should_tokenize_simple_example_with_text() {
         val simpleExample = "<!DOCTYPE html><html><body><p>hello</p></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
@@ -51,7 +51,7 @@ class TokenizerTest {
     }
 
     @Test
-    fun should_parse_simple_example_with_comment() {
+    fun should_tokenize_simple_example_with_comment() {
         val simpleExample = "<!DOCTYPE html><html><body><!-- Ignored comment --></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
@@ -71,7 +71,7 @@ class TokenizerTest {
     }
 
     @Test
-    fun should_parse_tags_with_attribute() {
+    fun should_tokenize_tags_with_attribute() {
         val simpleExample = "<!DOCTYPE html><html lang=en></html>"
         val tokenizer = Tokenizer(simpleExample)
 
@@ -88,7 +88,7 @@ class TokenizerTest {
     }
 
     @Test
-    fun should_parse_tags_with_numbers_in_names() {
+    fun should_tokenize_tags_with_numbers_in_names() {
         val simpleExample = "<!DOCTYPE html><html><h1>My title</h1></html>"
         val tokenizer = Tokenizer(simpleExample)
 

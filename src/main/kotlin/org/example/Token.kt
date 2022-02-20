@@ -109,7 +109,7 @@ open class Token {
         }
     }
 
-    class CommentToken(var data: String) : Token() {
+    class CommentToken(var data: String = "") : Token() {
         override fun toString(): String {
             return "CommentToken(data='$data')"
         }

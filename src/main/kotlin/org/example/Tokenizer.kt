@@ -1,13 +1,13 @@
 package org.example
 
-import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.lang.Character.*
 import kotlin.text.Charsets.UTF_8
 
 class Tokenizer(page: String) {
     //TODO: stringstream instead of bytes to skip conversion back and forth?
-    private val inputStream: BufferedInputStream = BufferedInputStream(ByteArrayInputStream(page.toByteArray(UTF_8)))
+    private val inputStream: InputStream = ByteArrayInputStream(page.toByteArray(UTF_8))
     private var currentToken: Token? = null
     private var tokens: MutableList<Token> = mutableListOf()
 
@@ -16,7 +16,7 @@ class Tokenizer(page: String) {
         tokenize(initialState)
 
         if (hasNextCharacter()) {
-            println("Unparsed: " + String(inputStream.readAllBytes()))
+            println("Not tokenized: " + String(inputStream.readAllBytes()))
         }
 
         return tokens
@@ -51,7 +51,6 @@ class Tokenizer(page: String) {
                 } else if (consumedCharacter == '/') {
                     tokenize(TokenizationState.EndTagOpenState)
                 } else if (isAlphabetic(consumedCharacter.code)) {
-                    //FIXME: parse tags
                     currentToken = Token.StartTagToken()
 
                     //Reconsume in the tag name state.
@@ -64,7 +63,7 @@ class Tokenizer(page: String) {
             TokenizationState.MarkupDeclarationOpenState -> {
                 if (nextCharactersAre("--", inputStream)) {
                     consumeCharacters("--")
-                    currentToken = Token.CommentToken("")
+                    currentToken = Token.CommentToken()
                     tokenize(TokenizationState.CommentStartState)
                 } else if (nextCharactersAre("DOCTYPE", inputStream)) {
                     consumeCharacters("DOCTYPE")
@@ -86,11 +85,11 @@ class Tokenizer(page: String) {
                 val consumedCharacter = consumeCharacter()
 
                 if (isAlphabetic(consumedCharacter.code)) {
-                    //FIXME names should be marked as missing
+                    //FIXME names should be marked as missing (according to spec)
 
                     //FIXME: lowercase name
                     val initialName = consumedCharacter.toString()
-                    currentToken = Token.DOCTYPEToken(initialName) //, "missing", "missing")
+                    currentToken = Token.DOCTYPEToken(initialName)
 
                     //Hm... loop automatically?
                     tokenize(TokenizationState.DOCTYPENameState)
@@ -102,9 +101,7 @@ class Tokenizer(page: String) {
                 if (consumedCharacter == '>') {
                     emitCurrentToken()
                     tokenize(TokenizationState.DataState)
-                }
-                if (isAlphabetic(consumedCharacter.code)) {
-                    //FIXME: lowercase name
+                } else {
                     (currentToken as Token.DOCTYPEToken).name += consumedCharacter
 
                     tokenize(TokenizationState.DOCTYPENameState)
@@ -259,11 +256,13 @@ class Tokenizer(page: String) {
         return Char(consumeCharacter)
     }
 
-    private fun nextCharactersAre(needle: String, haystack: BufferedInputStream): Boolean {
+    private fun nextCharactersAre(needle: String, haystack: InputStream): Boolean {
         haystack.mark(needle.length)
 
         for (c in needle.toCharArray()) {
-            //FIXME: and exists
+            if (haystack.available() <= 0) {
+                return false
+            }
             val peek = Char(haystack.read())
             if (peek != c) {
                 haystack.reset()
