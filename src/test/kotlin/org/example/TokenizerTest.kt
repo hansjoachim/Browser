@@ -49,4 +49,24 @@ class TokenizerTest {
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
+
+    @Test
+    fun should_parse_simple_example_with_comment() {
+        val simpleExample = "<!DOCTYPE html><html><body><!-- Ignored comment --></body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            Token.DOCTYPEToken("html"),
+            Token.StartTagToken("html"),
+            Token.StartTagToken("body"),
+            Token.CommentToken(" Ignored comment "),
+            Token.EndTagToken("body"),
+            Token.EndTagToken("html"),
+            Token.EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
 }

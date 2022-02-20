@@ -63,9 +63,15 @@ class Tokenizer(page: String) {
                 }
             }
             TokenizationState.MarkupDeclarationOpenState -> {
-                if (nextCharactersAre("DOCTYPE", inputStream)) {
+                if (nextCharactersAre("--", inputStream)) {
+                    consumeCharacters("--")
+                    currentToken = Token.CommentToken("")
+                    tokenize(TokenizationState.CommentStartState)
+                } else if (nextCharactersAre("DOCTYPE", inputStream)) {
                     consumeCharacters("DOCTYPE")
                     tokenize(TokenizationState.DOCTYPEState)
+                } else {
+                    unhandledCase(TokenizationState.MarkupDeclarationOpenState)
                 }
             }
             TokenizationState.DOCTYPEState -> {
@@ -132,6 +138,47 @@ class Tokenizer(page: String) {
                     tokenize(TokenizationState.TagNameState)
                 }
             }
+            TokenizationState.CommentStartState -> {
+                inputStream.mark(1)
+                val consumedCharacter = consumeCharacter()
+
+                if (consumedCharacter == '-') {
+                    tokenize(TokenizationState.CommentStartDashState)
+                } else {
+                    inputStream.reset()
+                    //reconsume
+                    tokenize(TokenizationState.CommentState)
+                }
+            }
+            TokenizationState.CommentState -> {
+                val consumedCharacter = consumeCharacter()
+
+                if (consumedCharacter == '-') {
+                    tokenize(TokenizationState.CommentEndDashState)
+                } else {
+                    (currentToken as Token.CommentToken).data += consumedCharacter
+                    tokenize(TokenizationState.CommentState)
+                }
+            }
+            TokenizationState.CommentEndDashState -> {
+                val consumedCharacter = consumeCharacter()
+
+                if (consumedCharacter == '-') {
+                    tokenize(TokenizationState.CommentEndState)
+                } else {
+                    unhandledCase(TokenizationState.CommentEndDashState, consumedCharacter)
+                }
+            }
+            TokenizationState.CommentEndState -> {
+                val consumedCharacter = consumeCharacter()
+
+                if (consumedCharacter == '>') {
+                    emitCurrentToken()
+                    tokenize(TokenizationState.DataState)
+                } else {
+                    unhandledCase(TokenizationState.CommentEndState, consumedCharacter)
+                }
+            }
             else -> {
                 println("Unhandled state: $state")
             }
@@ -142,7 +189,7 @@ class Tokenizer(page: String) {
         return inputStream.available() > 0
     }
 
-    private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char) {
+    private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char=' ') {
         println("Unhandled case in $state: $unhandledCharacter")
     }
 
