@@ -11,8 +11,10 @@ fun main(args: Array<String>) {
         .build()
     val client = HttpClient.newBuilder().build()
 
-    val result = client.send(request, BodyHandlers.ofString())
-    println("Hello, World")
-    println(result.body())
+    val result = client.send(request, BodyHandlers.ofString()).body()
+    println(result)
+    val tokens = Tokenizer(result).tokenize()
+
+    println("tokenized to $tokens")
 }
 
