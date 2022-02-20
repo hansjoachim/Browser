@@ -11,9 +11,10 @@ class Tokenizer(page: String) {
     private var currentToken: Token? = null
     private var tokens: MutableList<Token> = mutableListOf()
 
+    private var state = TokenizationState.DataState
+
     fun tokenize(): List<Token> {
-        val initialState = TokenizationState.DataState
-        tokenize(initialState)
+        tokenize(TokenizationState.DataState)
 
         if (hasNextCharacter()) {
             println("Not tokenized: " + String(inputStream.readAllBytes()))
@@ -22,214 +23,212 @@ class Tokenizer(page: String) {
         return tokens
     }
 
-    private fun tokenize(state: TokenizationState) {
-        when (state) {
-            TokenizationState.DataState -> {
-                val hasNextCharacter = hasNextCharacter()
+    private fun tokenize(initialState: TokenizationState) {
+        switchTo(initialState)
 
-                if (!hasNextCharacter) {
-                    currentToken = Token.EndOfFileToken()
-                    emitCurrentToken()
-                    return
+        do {
+            when (state) {
+                TokenizationState.DataState -> {
+
+                    //FIXME: spec compliant order somehow
+                    val hasNextCharacter = hasNextCharacter()
+
+                    if (!hasNextCharacter) {
+                        currentToken = Token.EndOfFileToken()
+                        emitCurrentToken()
+                        return
+                    }
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '<') {
+                        switchTo(TokenizationState.TagOpenState)
+                    } else {
+                        currentToken = Token.CharacterToken(consumedCharacter)
+                        emitCurrentToken()
+                    }
                 }
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.TagOpenState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
 
-                if (consumedCharacter == '<') {
-                    tokenize(TokenizationState.TagOpenState)
-                } else {
-                    currentToken = Token.CharacterToken(consumedCharacter)
-                    emitCurrentToken()
-                    tokenize(TokenizationState.DataState)
+                    if (consumedCharacter == '!') {
+                        switchTo(TokenizationState.MarkupDeclarationOpenState)
+                    } else if (consumedCharacter == '/') {
+                        switchTo(TokenizationState.EndTagOpenState)
+                    } else if (isAlphabetic(consumedCharacter.code)) {
+                        currentToken = Token.StartTagToken()
+
+                        //Reconsume in the tag name state.
+                        inputStream.reset()
+                        switchTo(TokenizationState.TagNameState)
+                    } else {
+                        unhandledCase(TokenizationState.TagOpenState, consumedCharacter)
+                    }
                 }
-            }
-            TokenizationState.TagOpenState -> {
-                inputStream.mark(1)
-                val consumedCharacter = consumeCharacter()
-
-                if (consumedCharacter == '!') {
-                    tokenize(TokenizationState.MarkupDeclarationOpenState)
-                } else if (consumedCharacter == '/') {
-                    tokenize(TokenizationState.EndTagOpenState)
-                } else if (isAlphabetic(consumedCharacter.code)) {
-                    currentToken = Token.StartTagToken()
-
-                    //Reconsume in the tag name state.
-                    inputStream.reset()
-                    tokenize(TokenizationState.TagNameState)
-                } else {
-                    unhandledCase(TokenizationState.TagOpenState, consumedCharacter)
+                TokenizationState.MarkupDeclarationOpenState -> {
+                    if (nextCharactersAre("--", inputStream)) {
+                        consumeCharacters("--")
+                        currentToken = Token.CommentToken()
+                        switchTo(TokenizationState.CommentStartState)
+                    } else if (nextCharactersAre("DOCTYPE", inputStream)) {
+                        consumeCharacters("DOCTYPE")
+                        switchTo(TokenizationState.DOCTYPEState)
+                    } else {
+                        unhandledCase(TokenizationState.MarkupDeclarationOpenState)
+                    }
                 }
-            }
-            TokenizationState.MarkupDeclarationOpenState -> {
-                if (nextCharactersAre("--", inputStream)) {
-                    consumeCharacters("--")
-                    currentToken = Token.CommentToken()
-                    tokenize(TokenizationState.CommentStartState)
-                } else if (nextCharactersAre("DOCTYPE", inputStream)) {
-                    consumeCharacters("DOCTYPE")
-                    tokenize(TokenizationState.DOCTYPEState)
-                } else {
-                    unhandledCase(TokenizationState.MarkupDeclarationOpenState)
+                TokenizationState.DOCTYPEState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (isWhitespace(consumedCharacter)) {
+                        switchTo(TokenizationState.BeforeDOCTYPENameState)
+                    } else {
+                        unhandledCase(TokenizationState.DOCTYPEState, consumedCharacter)
+                    }
                 }
-            }
-            TokenizationState.DOCTYPEState -> {
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.BeforeDOCTYPENameState -> {
+                    val consumedCharacter = consumeCharacter()
 
-                if (isWhitespace(consumedCharacter)) {
-                    tokenize(TokenizationState.BeforeDOCTYPENameState)
-                } else {
-                    unhandledCase(TokenizationState.DOCTYPEState, consumedCharacter)
+                    if (isAlphabetic(consumedCharacter.code)) {
+                        //FIXME names should be marked as missing (according to spec)
+
+                        val initialName = consumedCharacter.toString()
+                        currentToken = Token.DOCTYPEToken(initialName)
+
+                        switchTo(TokenizationState.DOCTYPENameState)
+                    }
                 }
-            }
-            TokenizationState.BeforeDOCTYPENameState -> {
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.DOCTYPENameState -> {
+                    val consumedCharacter = consumeCharacter()
 
-                if (isAlphabetic(consumedCharacter.code)) {
-                    //FIXME names should be marked as missing (according to spec)
-
-                    //FIXME: lowercase name
-                    val initialName = consumedCharacter.toString()
-                    currentToken = Token.DOCTYPEToken(initialName)
-
-                    //Hm... loop automatically?
-                    tokenize(TokenizationState.DOCTYPENameState)
+                    if (consumedCharacter == '>') {
+                        emitCurrentToken()
+                        switchTo(TokenizationState.DataState)
+                    } else {
+                        (currentToken as Token.DOCTYPEToken).name += consumedCharacter
+                    }
                 }
-            }
-            TokenizationState.DOCTYPENameState -> {
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.TagNameState -> {
+                    val consumedCharacter = consumeCharacter()
 
-                if (consumedCharacter == '>') {
-                    emitCurrentToken()
-                    tokenize(TokenizationState.DataState)
-                } else {
-                    (currentToken as Token.DOCTYPEToken).name += consumedCharacter
-
-                    tokenize(TokenizationState.DOCTYPENameState)
+                    if (isWhitespace(consumedCharacter)) {
+                        switchTo(TokenizationState.BeforeAttributeNameState)
+                    } else if (consumedCharacter == '>') {
+                        emitCurrentToken()
+                        switchTo(TokenizationState.DataState)
+                    } else if (isUpperCase(consumedCharacter.code)) {
+                        (currentToken as Token.TagToken).tagName += toLowerCase(consumedCharacter)
+                    } else {
+                        (currentToken as Token.TagToken).tagName += consumedCharacter
+                    }
                 }
-            }
-            TokenizationState.TagNameState -> {
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.BeforeAttributeNameState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
 
-                if (isWhitespace(consumedCharacter)) {
-                    tokenize(TokenizationState.BeforeAttributeNameState)
-                } else if (consumedCharacter == '>') {
-                    emitCurrentToken()
-                    tokenize(TokenizationState.DataState)
-                } else if (isUpperCase(consumedCharacter.code)) {
-                    (currentToken as Token.TagToken).tagName += toLowerCase(consumedCharacter)
-                    //Hm... loop automatically?
-                    tokenize(TokenizationState.TagNameState)
-                } else {
-                    (currentToken as Token.TagToken).tagName += consumedCharacter
-                    //Hm... loop automatically?
-                    tokenize(TokenizationState.TagNameState)
+                    if (isWhitespace(consumedCharacter)) {
+                        //do nothing
+                    } else {
+                        inputStream.reset()
+                        //reconsume
+                        (currentToken as Token.TagToken).attributes.add(Token.Attribute())
+                        switchTo(TokenizationState.AttributeNameState)
+                    }
                 }
-            }
-            TokenizationState.BeforeAttributeNameState -> {
-                inputStream.mark(1)
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.AttributeNameState -> {
+                    val consumedCharacter = consumeCharacter()
 
-                if (isWhitespace(consumedCharacter)) {
-                    tokenize(TokenizationState.BeforeAttributeNameState)
-                } else {
-                    inputStream.reset()
-                    //reconsume
-                    (currentToken as Token.TagToken).attributes.add(Token.Attribute())
-                    tokenize(TokenizationState.AttributeNameState)
+                    if (consumedCharacter == '=') {
+                        switchTo(TokenizationState.BeforeAttributeValueState)
+                    } else {
+                        //FIXME: horrible hack until I can point to current attribute
+                        //Let's hope no one use more that one attribute per tag ;)
+                        (currentToken as Token.TagToken).attributes[0].attributeName += consumedCharacter
+                    }
                 }
-            }
-            TokenizationState.AttributeNameState -> {
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.BeforeAttributeValueState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
 
-                if (consumedCharacter == '=') {
-                    tokenize(TokenizationState.BeforeAttributeValueState)
-                } else {
-                    //FIXME: horrible hack until I can point to current attribute
-                    //Let's hope no one use more that one attribute per tag ;)
-                    (currentToken as Token.TagToken).attributes[0].attributeName += consumedCharacter
-                    tokenize(TokenizationState.AttributeNameState)
-                }
-            }
-            TokenizationState.BeforeAttributeValueState -> {
-                inputStream.mark(1)
-                val consumedCharacter = consumeCharacter()
+                    //FIXME: lets hope no one use quotes :|
 
-                //FIXME: lets hope no one use quotes :|
-
-                inputStream.reset()
-                //reconsume
-                tokenize(TokenizationState.AttributeValueUnquotedState)
-            }
-            TokenizationState.AttributeValueUnquotedState -> {
-                val consumedCharacter = consumeCharacter()
-
-                if (consumedCharacter == '>') {
-                    emitCurrentToken()
-                    tokenize(TokenizationState.DataState)
-                } else {
-                    //FIXME: horrible hack until I can point to current attribute
-                    //Let's hope no one use more that one attribute per tag ;)
-                    (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
-                    tokenize(TokenizationState.AttributeValueUnquotedState)
-                }
-            }
-            TokenizationState.EndTagOpenState -> {
-                inputStream.mark(1)
-                val consumedCharacter = consumeCharacter()
-
-                if (isAlphabetic(consumedCharacter.code)) {
-                    currentToken = Token.EndTagToken("")
-
-                    //Reset to reconsume
-                    inputStream.reset()
-                    tokenize(TokenizationState.TagNameState)
-                }
-            }
-            TokenizationState.CommentStartState -> {
-                inputStream.mark(1)
-                val consumedCharacter = consumeCharacter()
-
-                if (consumedCharacter == '-') {
-                    tokenize(TokenizationState.CommentStartDashState)
-                } else {
                     inputStream.reset()
                     //reconsume
-                    tokenize(TokenizationState.CommentState)
+                    switchTo(TokenizationState.AttributeValueUnquotedState)
                 }
-            }
-            TokenizationState.CommentState -> {
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.AttributeValueUnquotedState -> {
+                    val consumedCharacter = consumeCharacter()
 
-                if (consumedCharacter == '-') {
-                    tokenize(TokenizationState.CommentEndDashState)
-                } else {
-                    (currentToken as Token.CommentToken).data += consumedCharacter
-                    tokenize(TokenizationState.CommentState)
+                    if (consumedCharacter == '>') {
+                        emitCurrentToken()
+                        switchTo(TokenizationState.DataState)
+                    } else {
+                        //FIXME: horrible hack until I can point to current attribute
+                        //Let's hope no one use more that one attribute per tag ;)
+                        (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
+                    }
                 }
-            }
-            TokenizationState.CommentEndDashState -> {
-                val consumedCharacter = consumeCharacter()
+                TokenizationState.EndTagOpenState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
 
-                if (consumedCharacter == '-') {
-                    tokenize(TokenizationState.CommentEndState)
-                } else {
-                    unhandledCase(TokenizationState.CommentEndDashState, consumedCharacter)
-                }
-            }
-            TokenizationState.CommentEndState -> {
-                val consumedCharacter = consumeCharacter()
+                    if (isAlphabetic(consumedCharacter.code)) {
+                        currentToken = Token.EndTagToken("")
 
-                if (consumedCharacter == '>') {
-                    emitCurrentToken()
-                    tokenize(TokenizationState.DataState)
-                } else {
-                    unhandledCase(TokenizationState.CommentEndState, consumedCharacter)
+                        //Reset to reconsume
+                        inputStream.reset()
+                        switchTo(TokenizationState.TagNameState)
+                    }
+                }
+                TokenizationState.CommentStartState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '-') {
+                        switchTo(TokenizationState.CommentStartDashState)
+                    } else {
+                        inputStream.reset()
+                        //reconsume
+                        switchTo(TokenizationState.CommentState)
+                    }
+                }
+                TokenizationState.CommentState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '-') {
+                        switchTo(TokenizationState.CommentEndDashState)
+                    } else {
+                        (currentToken as Token.CommentToken).data += consumedCharacter
+                    }
+                }
+                TokenizationState.CommentEndDashState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '-') {
+                        switchTo(TokenizationState.CommentEndState)
+                    } else {
+                        unhandledCase(TokenizationState.CommentEndDashState, consumedCharacter)
+                    }
+                }
+                TokenizationState.CommentEndState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '>') {
+                        emitCurrentToken()
+                        switchTo(TokenizationState.DataState)
+                    } else {
+                        unhandledCase(TokenizationState.CommentEndState, consumedCharacter)
+                    }
+                }
+                else -> {
+                    println("Unhandled state: $initialState")
                 }
             }
-            else -> {
-                println("Unhandled state: $state")
-            }
-        }
+        } while (Token.EndOfFileToken() !in tokens)
+    }
+
+    private fun switchTo(state: TokenizationState) {
+        this.state = state
     }
 
     private fun hasNextCharacter(): Boolean {
