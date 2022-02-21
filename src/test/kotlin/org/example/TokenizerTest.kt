@@ -113,4 +113,40 @@ class TokenizerTest {
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
+
+    @Test
+    fun should_tokenize_self_closing_tag() {
+        val simpleExample = "<!DOCTYPE html><html><br/></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            Token.DOCTYPEToken("html"),
+            Token.StartTagToken("html"),
+            Token.StartTagToken("br", selfClosing = true),
+            Token.EndTagToken("html"),
+            Token.EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Test
+    fun should_tokenize_self_closing_tag_this_time_with_space() {
+        val simpleExample = "<!DOCTYPE html><html><br /></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            Token.DOCTYPEToken("html"),
+            Token.StartTagToken("html"),
+            Token.StartTagToken("br", selfClosing = true),
+            Token.EndTagToken("html"),
+            Token.EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
 }

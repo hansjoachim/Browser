@@ -89,6 +89,8 @@ class Tokenizer(page: String) {
 
                     if (isWhitespace(consumedCharacter)) {
                         switchTo(TokenizationState.BeforeAttributeNameState)
+                    } else if (consumedCharacter == '/') {
+                        switchTo(TokenizationState.SelfClosingStartTagState)
                     } else if (consumedCharacter == '>') {
                         emitCurrentToken()
                         switchTo(TokenizationState.DataState)
@@ -172,7 +174,10 @@ class Tokenizer(page: String) {
                     val consumedCharacter = consumeCharacter()
 
                     if (isWhitespace(consumedCharacter)) {
-                        //do nothing
+                        //ignore
+                    } else if (consumedCharacter == '/' || consumedCharacter == '>') {
+                        inputStream.reset()
+                        switchTo(TokenizationState.AfterAttributeNameState)
                     } else {
                         inputStream.reset()
                         //reconsume
@@ -181,9 +186,13 @@ class Tokenizer(page: String) {
                     }
                 }
                 TokenizationState.AttributeNameState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '=') {
+                    if (isWhitespace(consumedCharacter) || consumedCharacter == '/' || consumedCharacter == '>') {
+                        inputStream.reset()
+                        switchTo(TokenizationState.AfterAttributeNameState)
+                    } else if (consumedCharacter == '=') {
                         switchTo(TokenizationState.BeforeAttributeValueState)
                     } else {
                         //FIXME: horrible hack until I can point to current attribute
@@ -192,7 +201,14 @@ class Tokenizer(page: String) {
                     }
                 }
                 TokenizationState.AfterAttributeNameState -> {
-                    unhandledCase(TokenizationState.AfterAttributeNameState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    if (isWhitespace((consumedCharacter))) {
+                        //ignore
+                    } else if (consumedCharacter == '/') {
+                        switchTo(TokenizationState.SelfClosingStartTagState)
+                    } else {
+                        unhandledCase(TokenizationState.AfterAttributeNameState, ' ')
+                    }
                 }
                 TokenizationState.BeforeAttributeValueState -> {
                     inputStream.mark(1)
@@ -226,7 +242,15 @@ class Tokenizer(page: String) {
                     unhandledCase(TokenizationState.AfterAttributeValueQuotedState, ' ')
                 }
                 TokenizationState.SelfClosingStartTagState -> {
-                    unhandledCase(TokenizationState.SelfClosingStartTagState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '>') {
+                        (currentToken as Token.StartTagToken).selfClosing = true
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else {
+                        unhandledCase(TokenizationState.SelfClosingStartTagState, ' ')
+                    }
                 }
                 TokenizationState.BogusCommentState -> {
                     unhandledCase(TokenizationState.BogusCommentState, ' ')

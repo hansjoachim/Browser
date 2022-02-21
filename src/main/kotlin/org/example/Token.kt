@@ -71,8 +71,11 @@ open class Token {
         }
     }
 
-    open class TagToken(var tagName: String, var attributes: MutableList<Attribute>) : Token() {
-        val selfClosing: Boolean = false
+    open class TagToken(
+        var tagName: String,
+        var attributes: MutableList<Attribute> = mutableListOf(),
+        var selfClosing: Boolean = false
+    ) : Token() {
 
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -96,14 +99,18 @@ open class Token {
 
     }
 
-    class StartTagToken(tagName: String = "", attributes: MutableList<Attribute> = mutableListOf()) :
-        TagToken(tagName, attributes) {
+    class StartTagToken(
+        tagName: String = "",
+        attributes: MutableList<Attribute> = mutableListOf(),
+        selfClosing: Boolean = false
+    ) :
+        TagToken(tagName, attributes, selfClosing) {
         override fun toString(): String {
             return "StartTagToken(tagName='$tagName', selfClosing=$selfClosing, attributes=$attributes)"
         }
     }
 
-    class EndTagToken(tagName: String = "") : TagToken(tagName, mutableListOf()) {
+    class EndTagToken(tagName: String = "") : TagToken(tagName) {
         override fun toString(): String {
             return "EndTagToken(tagName='$tagName', selfClosing=$selfClosing, attributes=$attributes)"
         }
