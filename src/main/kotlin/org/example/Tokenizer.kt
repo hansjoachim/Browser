@@ -15,11 +15,6 @@ class Tokenizer(page: String) {
 
     fun tokenize(): List<Token> {
         tokenize(TokenizationState.DataState)
-
-        if (hasNextCharacter()) {
-            println("Not tokenized: " + String(inputStream.readAllBytes()))
-        }
-
         return tokens
     }
 
@@ -47,6 +42,18 @@ class Tokenizer(page: String) {
                         emitCurrentToken()
                     }
                 }
+                TokenizationState.RCDATAState -> {
+                    unhandledCase(TokenizationState.RCDATAState, ' ')
+                }
+                TokenizationState.RAWTEXTState -> {
+                    unhandledCase(TokenizationState.RAWTEXTState, ' ')
+                }
+                TokenizationState.ScriptDataState -> {
+                    unhandledCase(TokenizationState.ScriptDataState, ' ')
+                }
+                TokenizationState.PLAINTEXTState -> {
+                    unhandledCase(TokenizationState.PLAINTEXTState, ' ')
+                }
                 TokenizationState.TagOpenState -> {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
@@ -65,6 +72,165 @@ class Tokenizer(page: String) {
                         unhandledCase(TokenizationState.TagOpenState, consumedCharacter)
                     }
                 }
+                TokenizationState.EndTagOpenState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (isAlphabetic(consumedCharacter.code)) {
+                        currentToken = Token.EndTagToken("")
+
+                        //Reset to reconsume
+                        inputStream.reset()
+                        switchTo(TokenizationState.TagNameState)
+                    }
+                }
+                TokenizationState.TagNameState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (isWhitespace(consumedCharacter)) {
+                        switchTo(TokenizationState.BeforeAttributeNameState)
+                    } else if (consumedCharacter == '>') {
+                        emitCurrentToken()
+                        switchTo(TokenizationState.DataState)
+                    } else if (isUpperCase(consumedCharacter.code)) {
+                        (currentToken as Token.TagToken).tagName += toLowerCase(consumedCharacter)
+                    } else {
+                        (currentToken as Token.TagToken).tagName += consumedCharacter
+                    }
+                }
+                TokenizationState.RCDATALessThanSignState -> {
+                    unhandledCase(TokenizationState.RCDATALessThanSignState, ' ')
+                }
+                TokenizationState.RCDATAEndTagOpenState -> {
+                    unhandledCase(TokenizationState.RCDATAEndTagOpenState, ' ')
+                }
+                TokenizationState.RCDATAEndTagNameState -> {
+                    unhandledCase(TokenizationState.RCDATAEndTagNameState, ' ')
+                }
+                TokenizationState.RAWTEXTLessThanSignState -> {
+                    unhandledCase(TokenizationState.RAWTEXTLessThanSignState, ' ')
+                }
+                TokenizationState.RAWTEXTEndTagOpenState -> {
+                    unhandledCase(TokenizationState.RAWTEXTEndTagOpenState, ' ')
+                }
+                TokenizationState.RAWTEXTEndTagNameState -> {
+                    unhandledCase(TokenizationState.RAWTEXTEndTagNameState, ' ')
+                }
+                TokenizationState.ScriptDataLessThanSignState -> {
+                    unhandledCase(TokenizationState.ScriptDataLessThanSignState, ' ')
+                }
+                TokenizationState.ScriptDataEndTagOpenState -> {
+                    unhandledCase(TokenizationState.ScriptDataEndTagOpenState, ' ')
+                }
+                TokenizationState.ScriptDataEndTagNameState -> {
+                    unhandledCase(TokenizationState.ScriptDataEndTagNameState, ' ')
+                }
+                TokenizationState.ScriptDataEscapeStartState -> {
+                    unhandledCase(TokenizationState.ScriptDataEscapeStartState, ' ')
+                }
+                TokenizationState.ScriptDataEscapeStartDashState -> {
+                    unhandledCase(TokenizationState.ScriptDataEscapeStartDashState, ' ')
+                }
+                TokenizationState.ScriptDataEscapedState -> {
+                    unhandledCase(TokenizationState.ScriptDataEscapedState, ' ')
+                }
+                TokenizationState.ScriptDataEscapedDashState -> {
+                    unhandledCase(TokenizationState.ScriptDataEscapedDashState, ' ')
+                }
+                TokenizationState.ScriptDataEscapedDashDashState -> {
+                    unhandledCase(TokenizationState.ScriptDataEscapedDashDashState, ' ')
+                }
+                TokenizationState.ScriptDataEscapedLessThanSignState -> {
+                    unhandledCase(TokenizationState.ScriptDataEscapedLessThanSignState, ' ')
+                }
+                TokenizationState.ScriptDataEscapedEndTagOpenState -> {
+                    unhandledCase(TokenizationState.ScriptDataEscapedEndTagOpenState, ' ')
+                }
+                TokenizationState.ScriptDataEscapedEndTagNameState -> {
+                    unhandledCase(TokenizationState.ScriptDataEscapedEndTagNameState, ' ')
+                }
+                TokenizationState.ScriptDataDoubleEscapeStartState -> {
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapeStartState, ' ')
+                }
+                TokenizationState.ScriptDataDoubleEscapedState -> {
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedState, ' ')
+                }
+                TokenizationState.ScriptDataDoubleEscapedDashState -> {
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedDashState, ' ')
+                }
+                TokenizationState.ScriptDataDoubleEscapedDashDashState -> {
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedDashDashState, ' ')
+                }
+                TokenizationState.ScriptDataDoubleEscapedLessThanSignState -> {
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedLessThanSignState, ' ')
+                }
+                TokenizationState.ScriptDataDoubleEscapeEndState -> {
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapeEndState, ' ')
+                }
+                TokenizationState.BeforeAttributeNameState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (isWhitespace(consumedCharacter)) {
+                        //do nothing
+                    } else {
+                        inputStream.reset()
+                        //reconsume
+                        (currentToken as Token.TagToken).attributes.add(Token.Attribute())
+                        switchTo(TokenizationState.AttributeNameState)
+                    }
+                }
+                TokenizationState.AttributeNameState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '=') {
+                        switchTo(TokenizationState.BeforeAttributeValueState)
+                    } else {
+                        //FIXME: horrible hack until I can point to current attribute
+                        //Let's hope no one use more that one attribute per tag ;)
+                        (currentToken as Token.TagToken).attributes[0].attributeName += consumedCharacter
+                    }
+                }
+                TokenizationState.AfterAttributeNameState -> {
+                    unhandledCase(TokenizationState.AfterAttributeNameState, ' ')
+                }
+                TokenizationState.BeforeAttributeValueState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    //FIXME: lets hope no one use quotes :|
+
+                    inputStream.reset()
+                    //reconsume
+                    switchTo(TokenizationState.AttributeValueUnquotedState)
+                }
+                TokenizationState.AttributeValueDoubleQuotedState -> {
+                    unhandledCase(TokenizationState.AttributeValueDoubleQuotedState, ' ')
+                }
+                TokenizationState.AttributeValueSingleQuotedState -> {
+                    unhandledCase(TokenizationState.AttributeValueSingleQuotedState, ' ')
+                }
+                TokenizationState.AttributeValueUnquotedState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '>') {
+                        emitCurrentToken()
+                        switchTo(TokenizationState.DataState)
+                    } else {
+                        //FIXME: horrible hack until I can point to current attribute
+                        //Let's hope no one use more that one attribute per tag ;)
+                        (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
+                    }
+                }
+                TokenizationState.AfterAttributeValueQuotedState -> {
+                    unhandledCase(TokenizationState.AfterAttributeValueQuotedState, ' ')
+                }
+                TokenizationState.SelfClosingStartTagState -> {
+                    unhandledCase(TokenizationState.SelfClosingStartTagState, ' ')
+                }
+                TokenizationState.BogusCommentState -> {
+                    unhandledCase(TokenizationState.BogusCommentState, ' ')
+                }
                 TokenizationState.MarkupDeclarationOpenState -> {
                     if (nextCharactersAre("--", inputStream)) {
                         consumeCharacters("--")
@@ -76,6 +242,64 @@ class Tokenizer(page: String) {
                     } else {
                         unhandledCase(TokenizationState.MarkupDeclarationOpenState)
                     }
+                }
+                TokenizationState.CommentStartState -> {
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '-') {
+                        switchTo(TokenizationState.CommentStartDashState)
+                    } else {
+                        inputStream.reset()
+                        //reconsume
+                        switchTo(TokenizationState.CommentState)
+                    }
+                }
+                TokenizationState.CommentStartDashState -> {
+                    unhandledCase(TokenizationState.CommentStartDashState, ' ')
+                }
+                TokenizationState.CommentState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '-') {
+                        switchTo(TokenizationState.CommentEndDashState)
+                    } else {
+                        (currentToken as Token.CommentToken).data += consumedCharacter
+                    }
+                }
+                TokenizationState.CommentLessThanSignState -> {
+                    unhandledCase(TokenizationState.CommentLessThanSignState, ' ')
+                }
+                TokenizationState.CommentLessThanSignBangState -> {
+                    unhandledCase(TokenizationState.CommentLessThanSignBangState, ' ')
+                }
+                TokenizationState.CommentLessThanSignBangDashState -> {
+                    unhandledCase(TokenizationState.CommentLessThanSignBangDashState, ' ')
+                }
+                TokenizationState.CommentLessThanSignBangDashDashState -> {
+                    unhandledCase(TokenizationState.CommentLessThanSignBangDashDashState, ' ')
+                }
+                TokenizationState.CommentEndDashState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '-') {
+                        switchTo(TokenizationState.CommentEndState)
+                    } else {
+                        unhandledCase(TokenizationState.CommentEndDashState, consumedCharacter)
+                    }
+                }
+                TokenizationState.CommentEndState -> {
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '>') {
+                        emitCurrentToken()
+                        switchTo(TokenizationState.DataState)
+                    } else {
+                        unhandledCase(TokenizationState.CommentEndState, consumedCharacter)
+                    }
+                }
+                TokenizationState.CommentEndBangState -> {
+                    unhandledCase(TokenizationState.CommentEndBangState, ' ')
                 }
                 TokenizationState.DOCTYPEState -> {
                     val consumedCharacter = consumeCharacter()
@@ -108,120 +332,80 @@ class Tokenizer(page: String) {
                         (currentToken as Token.DOCTYPEToken).name += consumedCharacter
                     }
                 }
-                TokenizationState.TagNameState -> {
-                    val consumedCharacter = consumeCharacter()
-
-                    if (isWhitespace(consumedCharacter)) {
-                        switchTo(TokenizationState.BeforeAttributeNameState)
-                    } else if (consumedCharacter == '>') {
-                        emitCurrentToken()
-                        switchTo(TokenizationState.DataState)
-                    } else if (isUpperCase(consumedCharacter.code)) {
-                        (currentToken as Token.TagToken).tagName += toLowerCase(consumedCharacter)
-                    } else {
-                        (currentToken as Token.TagToken).tagName += consumedCharacter
-                    }
+                TokenizationState.AfterDOCTYPENameState -> {
+                    unhandledCase(TokenizationState.AfterDOCTYPENameState, ' ')
                 }
-                TokenizationState.BeforeAttributeNameState -> {
-                    inputStream.mark(1)
-                    val consumedCharacter = consumeCharacter()
-
-                    if (isWhitespace(consumedCharacter)) {
-                        //do nothing
-                    } else {
-                        inputStream.reset()
-                        //reconsume
-                        (currentToken as Token.TagToken).attributes.add(Token.Attribute())
-                        switchTo(TokenizationState.AttributeNameState)
-                    }
+                TokenizationState.AfterDOCTYPEPublicKeywordState -> {
+                    unhandledCase(TokenizationState.AfterDOCTYPEPublicKeywordState, ' ')
                 }
-                TokenizationState.AttributeNameState -> {
-                    val consumedCharacter = consumeCharacter()
-
-                    if (consumedCharacter == '=') {
-                        switchTo(TokenizationState.BeforeAttributeValueState)
-                    } else {
-                        //FIXME: horrible hack until I can point to current attribute
-                        //Let's hope no one use more that one attribute per tag ;)
-                        (currentToken as Token.TagToken).attributes[0].attributeName += consumedCharacter
-                    }
+                TokenizationState.BeforeDOCTYPEPublicIdentifierState -> {
+                    unhandledCase(TokenizationState.BeforeDOCTYPEPublicIdentifierState, ' ')
                 }
-                TokenizationState.BeforeAttributeValueState -> {
-                    inputStream.mark(1)
-                    val consumedCharacter = consumeCharacter()
-
-                    //FIXME: lets hope no one use quotes :|
-
-                    inputStream.reset()
-                    //reconsume
-                    switchTo(TokenizationState.AttributeValueUnquotedState)
+                TokenizationState.DOCTYPEPublicIdentifierDoubleQuotedState -> {
+                    unhandledCase(TokenizationState.DOCTYPEPublicIdentifierDoubleQuotedState, ' ')
                 }
-                TokenizationState.AttributeValueUnquotedState -> {
-                    val consumedCharacter = consumeCharacter()
-
-                    if (consumedCharacter == '>') {
-                        emitCurrentToken()
-                        switchTo(TokenizationState.DataState)
-                    } else {
-                        //FIXME: horrible hack until I can point to current attribute
-                        //Let's hope no one use more that one attribute per tag ;)
-                        (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
-                    }
+                TokenizationState.DOCTYPEPublicIdentifierSingleQuotedState -> {
+                    unhandledCase(TokenizationState.DOCTYPEPublicIdentifierSingleQuotedState, ' ')
                 }
-                TokenizationState.EndTagOpenState -> {
-                    inputStream.mark(1)
-                    val consumedCharacter = consumeCharacter()
-
-                    if (isAlphabetic(consumedCharacter.code)) {
-                        currentToken = Token.EndTagToken("")
-
-                        //Reset to reconsume
-                        inputStream.reset()
-                        switchTo(TokenizationState.TagNameState)
-                    }
+                TokenizationState.AfterDOCTYPEPublicIdentifierState -> {
+                    unhandledCase(TokenizationState.AfterDOCTYPEPublicIdentifierState, ' ')
                 }
-                TokenizationState.CommentStartState -> {
-                    inputStream.mark(1)
-                    val consumedCharacter = consumeCharacter()
-
-                    if (consumedCharacter == '-') {
-                        switchTo(TokenizationState.CommentStartDashState)
-                    } else {
-                        inputStream.reset()
-                        //reconsume
-                        switchTo(TokenizationState.CommentState)
-                    }
+                TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState -> {
+                    unhandledCase(TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState, ' ')
                 }
-                TokenizationState.CommentState -> {
-                    val consumedCharacter = consumeCharacter()
-
-                    if (consumedCharacter == '-') {
-                        switchTo(TokenizationState.CommentEndDashState)
-                    } else {
-                        (currentToken as Token.CommentToken).data += consumedCharacter
-                    }
+                TokenizationState.AfterDOCTYPESystemKeywordState -> {
+                    unhandledCase(TokenizationState.AfterDOCTYPESystemKeywordState, ' ')
                 }
-                TokenizationState.CommentEndDashState -> {
-                    val consumedCharacter = consumeCharacter()
-
-                    if (consumedCharacter == '-') {
-                        switchTo(TokenizationState.CommentEndState)
-                    } else {
-                        unhandledCase(TokenizationState.CommentEndDashState, consumedCharacter)
-                    }
+                TokenizationState.BeforeDOCTYPESystemIdentifierState -> {
+                    unhandledCase(TokenizationState.BeforeDOCTYPESystemIdentifierState, ' ')
                 }
-                TokenizationState.CommentEndState -> {
-                    val consumedCharacter = consumeCharacter()
-
-                    if (consumedCharacter == '>') {
-                        emitCurrentToken()
-                        switchTo(TokenizationState.DataState)
-                    } else {
-                        unhandledCase(TokenizationState.CommentEndState, consumedCharacter)
-                    }
+                TokenizationState.DOCTYPESystemIdentifierDoubleQuotedState -> {
+                    unhandledCase(TokenizationState.DOCTYPESystemIdentifierDoubleQuotedState, ' ')
                 }
-                else -> {
-                    println("Unhandled state: $initialState")
+                TokenizationState.DOCTYPESystemIdentifierSingleQuotedState -> {
+                    unhandledCase(TokenizationState.DOCTYPESystemIdentifierSingleQuotedState, ' ')
+                }
+                TokenizationState.AfterDOCTYPESystemIdentifierState -> {
+                    unhandledCase(TokenizationState.AfterDOCTYPESystemIdentifierState, ' ')
+                }
+                TokenizationState.BogusDOCTYPEState -> {
+                    unhandledCase(TokenizationState.BogusDOCTYPEState, ' ')
+                }
+                TokenizationState.CDATASectionState -> {
+                    unhandledCase(TokenizationState.CDATASectionState, ' ')
+                }
+                TokenizationState.CDATASectionBracketState -> {
+                    unhandledCase(TokenizationState.CDATASectionBracketState, ' ')
+                }
+                TokenizationState.CDATASectionEndState -> {
+                    unhandledCase(TokenizationState.CDATASectionEndState, ' ')
+                }
+                TokenizationState.CharacterReferenceState -> {
+                    unhandledCase(TokenizationState.CharacterReferenceState, ' ')
+                }
+                TokenizationState.NamedCharacterReferenceState -> {
+                    unhandledCase(TokenizationState.NamedCharacterReferenceState, ' ')
+                }
+                TokenizationState.AmbiguousAmpersandState -> {
+                    unhandledCase(TokenizationState.AmbiguousAmpersandState, ' ')
+                }
+                TokenizationState.NumericCharacterReferenceState -> {
+                    unhandledCase(TokenizationState.NumericCharacterReferenceState, ' ')
+                }
+                TokenizationState.HexadecimalCharacterReferenceStartState -> {
+                    unhandledCase(TokenizationState.HexadecimalCharacterReferenceStartState, ' ')
+                }
+                TokenizationState.DecimalCharacterReferenceStartState -> {
+                    unhandledCase(TokenizationState.DecimalCharacterReferenceStartState, ' ')
+                }
+                TokenizationState.HexadecimalCharacterReferenceState -> {
+                    unhandledCase(TokenizationState.HexadecimalCharacterReferenceState, ' ')
+                }
+                TokenizationState.DecimalCharacterReferenceState -> {
+                    unhandledCase(TokenizationState.DecimalCharacterReferenceState, ' ')
+                }
+                TokenizationState.NumericCharacterReferenceEndState -> {
+                    unhandledCase(TokenizationState.NumericCharacterReferenceEndState, ' ')
                 }
             }
         } while (Token.EndOfFileToken() !in tokens)
@@ -236,7 +420,12 @@ class Tokenizer(page: String) {
     }
 
     private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char = ' ') {
+        // There's probably a more spec-compliant way to deal with unexpected cases.
+        // For now though, I'll insert an EndOfFile to break the endless loop and note where things went wrong
+        tokens.add(Token.EndOfFileToken())
+
         println("Unhandled case in $state: $unhandledCharacter")
+        println("Not tokenized: " + String(inputStream.readNBytes(100)) + "(...)")
     }
 
     private fun emitCurrentToken() {
