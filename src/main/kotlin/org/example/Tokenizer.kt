@@ -65,9 +65,7 @@ class Tokenizer(page: String) {
                     } else if (isAlphabetic(consumedCharacter.code)) {
                         currentToken = Token.StartTagToken()
 
-                        //Reconsume in the tag name state.
-                        inputStream.reset()
-                        switchTo(TokenizationState.TagNameState)
+                        reconsumeIn(TokenizationState.TagNameState)
                     } else {
                         unhandledCase(TokenizationState.TagOpenState, consumedCharacter)
                     }
@@ -78,10 +76,7 @@ class Tokenizer(page: String) {
 
                     if (isAlphabetic(consumedCharacter.code)) {
                         currentToken = Token.EndTagToken("")
-
-                        //Reset to reconsume
-                        inputStream.reset()
-                        switchTo(TokenizationState.TagNameState)
+                        reconsumeIn(TokenizationState.TagNameState)
                     }
                 }
                 TokenizationState.TagNameState -> {
@@ -176,13 +171,11 @@ class Tokenizer(page: String) {
                     if (isWhitespace(consumedCharacter)) {
                         //ignore
                     } else if (consumedCharacter == '/' || consumedCharacter == '>') {
-                        inputStream.reset()
-                        switchTo(TokenizationState.AfterAttributeNameState)
+                        val newState = TokenizationState.AfterAttributeNameState
+                        reconsumeIn(newState)
                     } else {
-                        inputStream.reset()
-                        //reconsume
                         (currentToken as Token.TagToken).attributes.add(Token.Attribute())
-                        switchTo(TokenizationState.AttributeNameState)
+                        reconsumeIn(TokenizationState.AttributeNameState)
                     }
                 }
                 TokenizationState.AttributeNameState -> {
@@ -190,8 +183,7 @@ class Tokenizer(page: String) {
                     val consumedCharacter = consumeCharacter()
 
                     if (isWhitespace(consumedCharacter) || consumedCharacter == '/' || consumedCharacter == '>') {
-                        inputStream.reset()
-                        switchTo(TokenizationState.AfterAttributeNameState)
+                        reconsumeIn(TokenizationState.AfterAttributeNameState)
                     } else if (consumedCharacter == '=') {
                         switchTo(TokenizationState.BeforeAttributeValueState)
                     } else {
@@ -216,9 +208,7 @@ class Tokenizer(page: String) {
 
                     //FIXME: lets hope no one use quotes :|
 
-                    inputStream.reset()
-                    //reconsume
-                    switchTo(TokenizationState.AttributeValueUnquotedState)
+                    reconsumeIn(TokenizationState.AttributeValueUnquotedState)
                 }
                 TokenizationState.AttributeValueDoubleQuotedState -> {
                     unhandledCase(TokenizationState.AttributeValueDoubleQuotedState, ' ')
@@ -274,9 +264,7 @@ class Tokenizer(page: String) {
                     if (consumedCharacter == '-') {
                         switchTo(TokenizationState.CommentStartDashState)
                     } else {
-                        inputStream.reset()
-                        //reconsume
-                        switchTo(TokenizationState.CommentState)
+                        reconsumeIn(TokenizationState.CommentState)
                     }
                 }
                 TokenizationState.CommentStartDashState -> {
@@ -433,6 +421,11 @@ class Tokenizer(page: String) {
                 }
             }
         } while (Token.EndOfFileToken() !in tokens)
+    }
+
+    private fun reconsumeIn(newState: TokenizationState) {
+        inputStream.reset()
+        switchTo(newState)
     }
 
     private fun switchTo(state: TokenizationState) {
