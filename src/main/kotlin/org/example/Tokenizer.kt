@@ -206,15 +206,43 @@ class Tokenizer(page: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    //FIXME: lets hope no one use quotes :|
-
-                    reconsumeIn(TokenizationState.AttributeValueUnquotedState)
+                    if (isWhitespace(consumedCharacter)) {
+                        //Ignore
+                    } else if (consumedCharacter == '"') {
+                        switchTo(TokenizationState.AttributeValueDoubleQuotedState)
+                    } else if (consumedCharacter == '\'') {
+                        switchTo(TokenizationState.AttributeValueSingleQuotedState)
+                    } else if (consumedCharacter == '>') {
+                        //This is a missing-attribute-value parse error.
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else {
+                        reconsumeIn(TokenizationState.AttributeValueUnquotedState)
+                    }
                 }
                 TokenizationState.AttributeValueDoubleQuotedState -> {
-                    unhandledCase(TokenizationState.AttributeValueDoubleQuotedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '"') {
+                        switchTo(TokenizationState.AfterAttributeValueQuotedState)
+                        //TODO: more cases
+                    } else {
+                        //FIXME: horrible hack until I can point to current attribute
+                        //Let's hope no one use more that one attribute per tag ;)
+                        (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
+                    }
                 }
                 TokenizationState.AttributeValueSingleQuotedState -> {
-                    unhandledCase(TokenizationState.AttributeValueSingleQuotedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '\'') {
+                        switchTo(TokenizationState.AfterAttributeValueQuotedState)
+                        //TODO: more cases
+                    } else {
+                        //FIXME: horrible hack until I can point to current attribute
+                        //Let's hope no one use more that one attribute per tag ;)
+                        (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
+                    }
                 }
                 TokenizationState.AttributeValueUnquotedState -> {
                     val consumedCharacter = consumeCharacter()
@@ -229,7 +257,18 @@ class Tokenizer(page: String) {
                     }
                 }
                 TokenizationState.AfterAttributeValueQuotedState -> {
-                    unhandledCase(TokenizationState.AfterAttributeValueQuotedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (isWhitespace(consumedCharacter)) {
+                        switchTo(TokenizationState.BeforeAttributeNameState)
+                    } else if (consumedCharacter == '/') {
+                        switchTo(TokenizationState.SelfClosingStartTagState)
+                    } else if (consumedCharacter == '>') {
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else {
+                        unhandledCase(TokenizationState.AfterAttributeValueQuotedState, ' ')
+                    }
                 }
                 TokenizationState.SelfClosingStartTagState -> {
                     val consumedCharacter = consumeCharacter()
