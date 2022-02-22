@@ -25,6 +25,25 @@ class TokenizerTest {
     }
 
     @Test
+    fun should_tokenize_lowercase_doctype() {
+        val simpleExample = "<!doctype html><html><body></body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            Token.DOCTYPEToken("html"),
+            Token.StartTagToken("html"),
+            Token.StartTagToken("body"),
+            Token.EndTagToken("body"),
+            Token.EndTagToken("html"),
+            Token.EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Test
     fun should_tokenize_simple_example_with_text() {
         val simpleExample = "<!DOCTYPE html><html><body><p>hello</p></body></html>"
         val tokenizer = Tokenizer(simpleExample)

@@ -193,13 +193,22 @@ class Tokenizer(page: String) {
                     }
                 }
                 TokenizationState.AfterAttributeNameState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
+
                     if (isWhitespace((consumedCharacter))) {
                         //ignore
                     } else if (consumedCharacter == '/') {
                         switchTo(TokenizationState.SelfClosingStartTagState)
+                    } else if (consumedCharacter == '=') {
+                        switchTo(TokenizationState.BeforeAttributeValueState)
+                    } else if (consumedCharacter == '>') {
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                        //TODO: EOF case
                     } else {
-                        unhandledCase(TokenizationState.AfterAttributeNameState, consumedCharacter)
+                        //FIXME: Start a new attribute in the current tag token. Set that attribute name and value to the empty string.
+                        reconsumeIn(TokenizationState.AttributeNameState)
                     }
                 }
                 TokenizationState.BeforeAttributeValueState -> {
@@ -285,11 +294,11 @@ class Tokenizer(page: String) {
                     unhandledCase(TokenizationState.BogusCommentState, ' ')
                 }
                 TokenizationState.MarkupDeclarationOpenState -> {
-                    if (nextCharactersAre("--", inputStream)) {
+                    if (nextCharactersAreCaseInsensitiveMatch("--", inputStream)) {
                         consumeCharacters("--")
                         currentToken = Token.CommentToken()
                         switchTo(TokenizationState.CommentStartState)
-                    } else if (nextCharactersAre("DOCTYPE", inputStream)) {
+                    } else if (nextCharactersAreCaseInsensitiveMatch("DOCTYPE", inputStream)) {
                         consumeCharacters("DOCTYPE")
                         switchTo(TokenizationState.DOCTYPEState)
                     } else {
@@ -554,7 +563,7 @@ class Tokenizer(page: String) {
         return Char(consumeCharacter)
     }
 
-    private fun nextCharactersAre(needle: String, haystack: InputStream): Boolean {
+    private fun nextCharactersAreCaseInsensitiveMatch(needle: String, haystack: InputStream): Boolean {
         haystack.mark(needle.length)
 
         for (c in needle.toCharArray()) {
@@ -562,7 +571,7 @@ class Tokenizer(page: String) {
                 return false
             }
             val peek = Char(haystack.read())
-            if (peek != c) {
+            if (!peek.toString().equals(c.toString(), ignoreCase = true)) {
                 haystack.reset()
                 println("false!")
                 return false
