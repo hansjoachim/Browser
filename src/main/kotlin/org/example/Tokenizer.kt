@@ -199,7 +199,7 @@ class Tokenizer(page: String) {
                     } else if (consumedCharacter == '/') {
                         switchTo(TokenizationState.SelfClosingStartTagState)
                     } else {
-                        unhandledCase(TokenizationState.AfterAttributeNameState, ' ')
+                        unhandledCase(TokenizationState.AfterAttributeNameState, consumedCharacter)
                     }
                 }
                 TokenizationState.BeforeAttributeValueState -> {
@@ -261,10 +261,18 @@ class Tokenizer(page: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '-') {
-                        switchTo(TokenizationState.CommentStartDashState)
-                    } else {
-                        reconsumeIn(TokenizationState.CommentState)
+                    when (consumedCharacter) {
+                        '-' -> {
+                            switchTo(TokenizationState.CommentStartDashState)
+                        }
+                        '>' -> {
+                            //This is an abrupt-closing-of-empty-comment parse error.
+                            switchTo(TokenizationState.DataState)
+                            emitCurrentToken()
+                        }
+                        else -> {
+                            reconsumeIn(TokenizationState.CommentState)
+                        }
                     }
                 }
                 TokenizationState.CommentStartDashState -> {
@@ -273,31 +281,74 @@ class Tokenizer(page: String) {
                 TokenizationState.CommentState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '-') {
-                        switchTo(TokenizationState.CommentEndDashState)
-                    } else {
-                        (currentToken as Token.CommentToken).data += consumedCharacter
+                    when (consumedCharacter) {
+                        '<' -> {
+                            (currentToken as Token.CommentToken).data += consumedCharacter
+                            switchTo(TokenizationState.CommentLessThanSignState)
+                        }
+                        '-' -> {
+                            switchTo(TokenizationState.CommentEndDashState)
+                        }
+                        else -> {
+                            (currentToken as Token.CommentToken).data += consumedCharacter
+                        }
                     }
                 }
                 TokenizationState.CommentLessThanSignState -> {
-                    unhandledCase(TokenizationState.CommentLessThanSignState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+                    if (consumedCharacter == '!') {
+                        (currentToken as Token.CommentToken).data += consumedCharacter
+                        switchTo(TokenizationState.CommentLessThanSignBangState)
+                    } else if (consumedCharacter == '<') {
+                        (currentToken as Token.CommentToken).data += consumedCharacter
+                    } else {
+                        reconsumeIn(TokenizationState.CommentState)
+                    }
                 }
                 TokenizationState.CommentLessThanSignBangState -> {
-                    unhandledCase(TokenizationState.CommentLessThanSignBangState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '-') {
+                        switchTo(TokenizationState.CommentLessThanSignBangDashState)
+                    } else {
+                        reconsumeIn(TokenizationState.CommentState)
+                    }
                 }
                 TokenizationState.CommentLessThanSignBangDashState -> {
-                    unhandledCase(TokenizationState.CommentLessThanSignBangDashState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '-') {
+                        switchTo(TokenizationState.CommentLessThanSignBangDashDashState)
+                    } else {
+                        reconsumeIn(TokenizationState.CommentEndDashState)
+                    }
                 }
                 TokenizationState.CommentLessThanSignBangDashDashState -> {
-                    unhandledCase(TokenizationState.CommentLessThanSignBangDashDashState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter == '>') {
+                        //TODO: or EOF
+                        reconsumeIn(TokenizationState.CommentEndState)
+                    } else {
+                        //This is a nested-comment parse error.
+                        reconsumeIn(TokenizationState.CommentEndState)
+                    }
                 }
                 TokenizationState.CommentEndDashState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter == '-') {
                         switchTo(TokenizationState.CommentEndState)
+                        //TODO: deal with null character
                     } else {
-                        unhandledCase(TokenizationState.CommentEndDashState, consumedCharacter)
+                        //Explicity append, since the - has already been consumed
+                        (currentToken as Token.CommentToken).data += '-'
+                        reconsumeIn(TokenizationState.CommentState)
                     }
                 }
                 TokenizationState.CommentEndState -> {
@@ -438,7 +489,10 @@ class Tokenizer(page: String) {
 
     private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char = ' ') {
         // There's probably a more spec-compliant way to deal with unexpected cases.
-        // For now though, I'll insert an EndOfFile to break the endless loop and note where things went wrong
+        // For now though, emit whatever we were working on and insert an EndOfFile to break the endless loop and note where things went wrong
+        if (currentToken != null) {
+            emitCurrentToken()
+        }
         tokens.add(Token.EndOfFileToken())
 
         println("Unhandled case in $state: $unhandledCharacter")

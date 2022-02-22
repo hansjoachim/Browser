@@ -51,7 +51,7 @@ class TokenizerTest {
     }
 
     @Test
-    fun should_tokenize_simple_example_with_comment() {
+    fun should_tokenize_comment() {
         val simpleExample = "<!DOCTYPE html><html><body><!-- Ignored comment --></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
@@ -62,6 +62,26 @@ class TokenizerTest {
             Token.StartTagToken("html"),
             Token.StartTagToken("body"),
             Token.CommentToken(" Ignored comment "),
+            Token.EndTagToken("body"),
+            Token.EndTagToken("html"),
+            Token.EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Test
+    fun should_tokenize_comment_one_dash_should_not_be_the_end_of_it() {
+        val simpleExample = "<!DOCTYPE html><html><body><!-- Comment with - in the middle --></body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            Token.DOCTYPEToken("html"),
+            Token.StartTagToken("html"),
+            Token.StartTagToken("body"),
+            Token.CommentToken(" Comment with - in the middle "),
             Token.EndTagToken("body"),
             Token.EndTagToken("html"),
             Token.EndOfFileToken()

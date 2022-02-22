@@ -6,7 +6,16 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse.BodyHandlers
 
 fun main(args: Array<String>) {
-    val request = HttpRequest.newBuilder(URI(args[0]))
+    if (args.isEmpty()) {
+        println("You didn't give me a URI as the first parameter")
+        return;
+    }
+    val uri = URI(args[0])
+    goTo(uri)
+}
+
+private fun goTo(uri: URI) {
+    val request = HttpRequest.newBuilder(uri)
         .GET()
         .build()
     val client = HttpClient.newBuilder().build()
