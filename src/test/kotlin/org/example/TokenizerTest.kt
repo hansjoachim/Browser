@@ -161,6 +161,29 @@ class TokenizerTest {
     }
 
     @Test
+    fun should_tokenize_tags_with_multiple_attributes() {
+        val simpleExample = "<!DOCTYPE html><html><body id=\"test\" class='some class' lang=en-US></body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            Token.DOCTYPEToken("html"),
+            Token.StartTagToken("html"),
+            Token.StartTagToken("body", mutableListOf(
+                Token.Attribute("id", "test"),
+                Token.Attribute("class", "some class"),
+                Token.Attribute("lang", "en-US"),
+            )),
+            Token.EndTagToken("body"),
+            Token.EndTagToken("html"),
+            Token.EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Test
     fun should_tokenize_tags_with_numbers_in_names() {
         val simpleExample = "<!DOCTYPE html><html><h1>My title</h1></html>"
         val tokenizer = Tokenizer(simpleExample)

@@ -171,8 +171,7 @@ class Tokenizer(document: String) {
                     if (isWhitespace(consumedCharacter)) {
                         //ignore
                     } else if (consumedCharacter == '/' || consumedCharacter == '>') {
-                        val newState = TokenizationState.AfterAttributeNameState
-                        reconsumeIn(newState)
+                        reconsumeIn(TokenizationState.AfterAttributeNameState)
                     } else {
                         (currentToken as Token.TagToken).attributes.add(Token.Attribute())
                         reconsumeIn(TokenizationState.AttributeNameState)
@@ -187,9 +186,8 @@ class Tokenizer(document: String) {
                     } else if (consumedCharacter == '=') {
                         switchTo(TokenizationState.BeforeAttributeValueState)
                     } else {
-                        //FIXME: horrible hack until I can point to current attribute
-                        //Let's hope no one use more that one attribute per tag ;)
-                        (currentToken as Token.TagToken).attributes[0].attributeName += consumedCharacter
+                        val currentAttribute = (currentToken as Token.TagToken).attributes.last()
+                        currentAttribute.attributeName += consumedCharacter
                     }
                 }
                 TokenizationState.AfterAttributeNameState -> {
@@ -236,9 +234,8 @@ class Tokenizer(document: String) {
                         switchTo(TokenizationState.AfterAttributeValueQuotedState)
                         //TODO: more cases
                     } else {
-                        //FIXME: horrible hack until I can point to current attribute
-                        //Let's hope no one use more that one attribute per tag ;)
-                        (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
+                        val currentAttribute = (currentToken as Token.TagToken).attributes.last()
+                        currentAttribute.value += consumedCharacter
                     }
                 }
                 TokenizationState.AttributeValueSingleQuotedState -> {
@@ -248,21 +245,21 @@ class Tokenizer(document: String) {
                         switchTo(TokenizationState.AfterAttributeValueQuotedState)
                         //TODO: more cases
                     } else {
-                        //FIXME: horrible hack until I can point to current attribute
-                        //Let's hope no one use more that one attribute per tag ;)
-                        (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
+                        val currentAtribute = (currentToken as Token.TagToken).attributes.last()
+                        currentAtribute.value += consumedCharacter
                     }
                 }
                 TokenizationState.AttributeValueUnquotedState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '>') {
-                        emitCurrentToken()
+                    if (isWhitespace(consumedCharacter)) {
+                        switchTo(TokenizationState.BeforeAttributeNameState)
+                    } else if (consumedCharacter == '>') {
                         switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
                     } else {
-                        //FIXME: horrible hack until I can point to current attribute
-                        //Let's hope no one use more that one attribute per tag ;)
-                        (currentToken as Token.TagToken).attributes[0].value += consumedCharacter
+                        val currentAttribute = (currentToken as Token.TagToken).attributes.last()
+                        currentAttribute.value += consumedCharacter
                     }
                 }
                 TokenizationState.AfterAttributeValueQuotedState -> {
