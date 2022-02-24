@@ -13,12 +13,12 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("body"),
-            Token.EndTagToken("body"),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -32,12 +32,12 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("body"),
-            Token.EndTagToken("body"),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -51,19 +51,19 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("body"),
-            Token.StartTagToken("p"),
-            Token.CharacterToken('h'),
-            Token.CharacterToken('e'),
-            Token.CharacterToken('l'),
-            Token.CharacterToken('l'),
-            Token.CharacterToken('o'),
-            Token.EndTagToken("p"),
-            Token.EndTagToken("body"),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            StartTagToken("p"),
+            CharacterToken('h'),
+            CharacterToken('e'),
+            CharacterToken('l'),
+            CharacterToken('l'),
+            CharacterToken('o'),
+            EndTagToken("p"),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -77,13 +77,13 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("body"),
-            Token.CommentToken(" Ignored comment "),
-            Token.EndTagToken("body"),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            CommentToken(" Ignored comment "),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -97,13 +97,13 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("body"),
-            Token.CommentToken(" Comment with - in the middle "),
-            Token.EndTagToken("body"),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            CommentToken(" Comment with - in the middle "),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -117,10 +117,10 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html", mutableListOf(Token.Attribute("lang", "en"))),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html", mutableListOf(Attribute("lang", "en"))),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -134,10 +134,10 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html", mutableListOf(Token.Attribute("lang", "en"))),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html", mutableListOf(Attribute("lang", "en"))),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -151,10 +151,10 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html", mutableListOf(Token.Attribute("lang", "en"))),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html", mutableListOf(Attribute("lang", "en"))),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -168,16 +168,18 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("body", mutableListOf(
-                Token.Attribute("id", "test"),
-                Token.Attribute("class", "some class"),
-                Token.Attribute("lang", "en-US"),
-            )),
-            Token.EndTagToken("body"),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken(
+                "body", mutableListOf(
+                    Attribute("id", "test"),
+                    Attribute("class", "some class"),
+                    Attribute("lang", "en-US"),
+                )
+            ),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -191,20 +193,20 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("h1"),
-            Token.CharacterToken('M'),
-            Token.CharacterToken('y'),
-            Token.CharacterToken(' '),
-            Token.CharacterToken('t'),
-            Token.CharacterToken('i'),
-            Token.CharacterToken('t'),
-            Token.CharacterToken('l'),
-            Token.CharacterToken('e'),
-            Token.EndTagToken("h1"),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("h1"),
+            CharacterToken('M'),
+            CharacterToken('y'),
+            CharacterToken(' '),
+            CharacterToken('t'),
+            CharacterToken('i'),
+            CharacterToken('t'),
+            CharacterToken('l'),
+            CharacterToken('e'),
+            EndTagToken("h1"),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -218,11 +220,11 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("br", selfClosing = true),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("br", selfClosing = true),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
@@ -236,11 +238,11 @@ class TokenizerTest {
         val tokens = tokenizer.tokenize()
 
         val expectedTokens = listOf(
-            Token.DOCTYPEToken("html"),
-            Token.StartTagToken("html"),
-            Token.StartTagToken("br", selfClosing = true),
-            Token.EndTagToken("html"),
-            Token.EndOfFileToken()
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("br", selfClosing = true),
+            EndTagToken("html"),
+            EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)

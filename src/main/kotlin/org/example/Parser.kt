@@ -26,8 +26,8 @@ class Parser {
             val token = tokens.removeFirst()
             when (currentMode) {
                 InsertionMode.initial -> {
-                    if (token.type == Token.TokenType.DOCTYPE) {
-                        val doctype = (token as Token.DOCTYPEToken)
+                    if (token.type == TokenType.DOCTYPE) {
+                        val doctype = (token as DOCTYPEToken)
                         if ("html".equals(doctype.name)) {
                             val documentType =
                                 DocumentType(doctype.name, doctype.publicIdentifier, doctype.systemIdentifier)
@@ -42,8 +42,8 @@ class Parser {
                     }
                 }
                 InsertionMode.beforeHtml -> {
-                    if (token.type == Token.TokenType.StartTag) {
-                        val startTag = (token as Token.StartTagToken)
+                    if (token.type == TokenType.StartTag) {
+                        val startTag = (token as StartTagToken)
 
                         if ("html".equals(startTag.tagName)) {
                             val e = Element(tagName = startTag.tagName)
@@ -59,28 +59,28 @@ class Parser {
                     }
                 }
                 InsertionMode.beforeHead -> {
-                    if (token.type == Token.TokenType.Character && isWhitespace((token as Token.CharacterToken).data)) {
+                    if (token.type == TokenType.Character && isWhitespace((token as CharacterToken).data)) {
                         unhandledMode(InsertionMode.beforeHead, token)
-                    } else if (token.type == Token.TokenType.Comment) {
+                    } else if (token.type == TokenType.Comment) {
                         unhandledMode(InsertionMode.beforeHead, token)
-                    } else if (token.type == Token.TokenType.DOCTYPE) {
+                    } else if (token.type == TokenType.DOCTYPE) {
                         unhandledMode(InsertionMode.beforeHead, token)
-                    } else if (token.type == Token.TokenType.StartTag && "html".equals((token as Token.StartTagToken).tagName)) {
+                    } else if (token.type == TokenType.StartTag && "html".equals((token as StartTagToken).tagName)) {
                         unhandledMode(InsertionMode.beforeHead, token)
-                    } else if (token.type == Token.TokenType.StartTag && "head".equals((token as Token.StartTagToken).tagName)) {
+                    } else if (token.type == TokenType.StartTag && "head".equals((token as StartTagToken).tagName)) {
                         unhandledMode(InsertionMode.beforeHead, token)
-                    } else if (token.type == Token.TokenType.EndTag && listOf(
+                    } else if (token.type == TokenType.EndTag && listOf(
                             "head",
                             "body",
                             "html",
                             "br"
-                        ).contains((token as Token.EndTagToken).tagName)
+                        ).contains((token as EndTagToken).tagName)
                     ) {
                         unhandledMode(InsertionMode.beforeHead, token)
-                    } else if (token.type == Token.TokenType.EndTag) {
+                    } else if (token.type == TokenType.EndTag) {
                         unhandledMode(InsertionMode.beforeHead, token)
                     } else {
-                        val fakeHead = Token.StartTagToken("head")
+                        val fakeHead = StartTagToken("head")
                         val head = createHtmlElement(fakeHead)
 
                         headElementPointer = head
@@ -105,7 +105,7 @@ class Parser {
                     unhandledMode(InsertionMode.inHeadNoscript, token)
                 }
                 InsertionMode.afterHead -> {
-                    if (token.type == Token.TokenType.StartTag && "body" == (token as Token.StartTagToken).tagName) {
+                    if (token.type == TokenType.StartTag && "body" == (token as StartTagToken).tagName) {
                         createHtmlElement(token)
                         //Set the Document's awaiting parser-inserted body flag to false.
 
@@ -117,11 +117,11 @@ class Parser {
                     }
                 }
                 InsertionMode.inBody -> {
-                    if (token.type == Token.TokenType.EndTag && "body" == (token as Token.EndTagToken).tagName) {
+                    if (token.type == TokenType.EndTag && "body" == (token as EndTagToken).tagName) {
                         //Check stack and look for parse errors
                         switchTo(InsertionMode.afterBody)
                         //TODO: other cases
-                    } else if (token.type == Token.TokenType.EndTag && "html" == (token as Token.EndTagToken).tagName) {
+                    } else if (token.type == TokenType.EndTag && "html" == (token as EndTagToken).tagName) {
                         //Check stack and look for parse errors
                         switchTo(InsertionMode.afterBody)
                         //TODO: other cases
@@ -163,7 +163,7 @@ class Parser {
                     unhandledMode(InsertionMode.inTemplate, token)
                 }
                 InsertionMode.afterBody -> {
-                    if (token.type == Token.TokenType.EndTag && "html" == (token as Token.EndTagToken).tagName) {
+                    if (token.type == TokenType.EndTag && "html" == (token as EndTagToken).tagName) {
                         //Check  for parse errors
                         switchTo(InsertionMode.afterAfterBody)
                         //TODO: other cases
@@ -178,7 +178,7 @@ class Parser {
                     unhandledMode(InsertionMode.afterFrameset, token)
                 }
                 InsertionMode.afterAfterBody -> {
-                    if (token.type == Token.TokenType.EndOfFile) {
+                    if (token.type == TokenType.EndOfFile) {
                         //Stop parsing
                     } else {
                         unhandledMode(InsertionMode.afterAfterBody, token)
@@ -192,7 +192,7 @@ class Parser {
         return root
     }
 
-    private fun createHtmlElement(token: Token.StartTagToken): Element {
+    private fun createHtmlElement(token: StartTagToken): Element {
         val head = Element(tagName = token.tagName)
 
         val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()
