@@ -8,7 +8,7 @@ import java.net.http.HttpResponse.BodyHandlers
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
         println("You didn't give me a URI as the first parameter")
-        return;
+        return
     }
     val uri = URI(args[0])
     goTo(uri)

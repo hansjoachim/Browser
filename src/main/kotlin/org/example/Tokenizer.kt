@@ -5,9 +5,9 @@ import java.io.InputStream
 import java.lang.Character.*
 import kotlin.text.Charsets.UTF_8
 
-class Tokenizer(page: String) {
+class Tokenizer(document: String) {
     //TODO: stringstream instead of bytes to skip conversion back and forth?
-    private val inputStream: InputStream = ByteArrayInputStream(page.toByteArray(UTF_8))
+    private val inputStream: InputStream = ByteArrayInputStream(document.toByteArray(UTF_8))
     private var currentToken: Token? = null
     private var tokens: MutableList<Token> = mutableListOf()
 
