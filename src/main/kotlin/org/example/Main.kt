@@ -15,12 +15,7 @@ fun main(args: Array<String>) {
 }
 
 private fun goTo(uri: URI) {
-    val request = HttpRequest.newBuilder(uri)
-        .GET()
-        .build()
-    val client = HttpClient.newBuilder().build()
-
-    val result = client.send(request, BodyHandlers.ofString()).body()
+    val result = getRequest(uri)
     println(result)
     val tokens = Tokenizer(result).tokenize()
 
@@ -28,5 +23,23 @@ private fun goTo(uri: URI) {
 
     val document = Parser().parse(result)
     DOMDebugger.printDOMTree(document)
+}
+
+private fun getRequest(uri: URI): String {
+    val request = HttpRequest.newBuilder(uri)
+        .GET()
+        .build()
+    val client = HttpClient.newBuilder().build()
+
+    val response = client.send(request, BodyHandlers.ofString())
+
+    if (response.statusCode() == 301) {
+        val possibleLocation = response.headers().firstValue("Location")
+        if (possibleLocation.isPresent) {
+            println("Redirected to... ${possibleLocation.get()}")
+            return getRequest(URI(possibleLocation.get()))
+        }
+    }
+    return response.body()
 }
 
