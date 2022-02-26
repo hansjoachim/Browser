@@ -55,6 +55,51 @@ class ParserTest {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
-    //TODO: test with comments
+    @Test
+    fun should_parse_example_with_comments() {
+        val simpleExample = """
+<!-- In the beginning... -->
+<!DOCTYPE html>
+<!-- Some comment after DOCTYPE -->
+<html>
+<!-- Some comment before head -->
+<head>
+<!-- Some comment in head -->
+</head>
+<!-- Some comment after head -->
+<body>
+<!-- Some comment in body -->
+</body>
+<!-- Some comment after body -->
+</html>
+<!-- Some comment at the end -->
+"""
+        val parser = Parser()
+        val document = parser.parse(simpleExample)
+
+        val expectedDOM = """#document
+	#comment
+	#comment
+	html
+		#comment
+		head
+			#text
+			#comment
+			#text
+		#text
+		#comment
+		#text
+		body
+			#text
+			#comment
+			#text
+		#comment
+	#comment
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    //TODO: meta tags
 
 }

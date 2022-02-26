@@ -35,6 +35,9 @@ class Parser {
                 InsertionMode.initial -> {
                     if (token.type == TokenType.Character && isWhitespace((token as CharacterToken).data)) {
                         //ignore
+                    } else if (token.type == TokenType.Comment) {
+                        val comment = CommentImpl((token as CommentToken).data)
+                        root.appendChild(comment)
                     } else if (token.type == TokenType.DOCTYPE) {
                         //FIXME: might be parse error based on values
                         val doctype = (token as DOCTYPEToken)
@@ -53,7 +56,8 @@ class Parser {
                     if (token.type == TokenType.DOCTYPE) {
                         unhandledMode(InsertionMode.beforeHtml, token)
                     } else if (token.type == TokenType.Comment) {
-                        unhandledMode(InsertionMode.beforeHtml, token)
+                        val comment = CommentImpl((token as CommentToken).data)
+                        root.appendChild(comment)
                     } else if (token.type == TokenType.Character && isWhitespace((token as CharacterToken).data)) {
                         //ignore
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "html") {
@@ -82,7 +86,7 @@ class Parser {
                     if (token.type == TokenType.Character && isWhitespace((token as CharacterToken).data)) {
                         //ignore
                     } else if (token.type == TokenType.Comment) {
-                        unhandledMode(InsertionMode.beforeHead, token)
+                        insertComment((token as CommentToken))
                     } else if (token.type == TokenType.DOCTYPE) {
                         unhandledMode(InsertionMode.beforeHead, token)
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "html") {
@@ -121,6 +125,8 @@ class Parser {
 
                     if (token.type == TokenType.Character && isWhitespace(((token as CharacterToken).data))) {
                         insertCharacter(token)
+                    } else if (token.type == TokenType.Comment) {
+                        insertComment((token as CommentToken))
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "title") {
                         RCDATAparsing(token)
                     } else if (token.type == TokenType.EndTag && (token as EndTagToken).tagName == "head") {
@@ -142,6 +148,8 @@ class Parser {
                 InsertionMode.afterHead -> {
                     if (token.type == TokenType.Character && isWhitespace((token as CharacterToken).data)) {
                         insertCharacter(token)
+                    } else if (token.type == TokenType.Comment) {
+                        insertComment((token as CommentToken))
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "body") {
                         createHtmlElement(token)
                         //Set the Document's awaiting parser-inserted body flag to false.
@@ -161,6 +169,8 @@ class Parser {
                         //FIXME: reconstruct the active formatting elements
                         insertCharacter((token as CharacterToken))
                         framsetOk = false
+                    } else if (token.type == TokenType.Comment) {
+                        insertComment((token as CommentToken))
                     } else if (token.type == TokenType.EndTag && (token as EndTagToken).tagName == "body") {
                         //Check stack and look for parse errors
                         switchTo(InsertionMode.afterBody)
@@ -309,6 +319,10 @@ class Parser {
                         //TODO: same rules as in body
                         //FIXME: reconstruct the active formatting elements
                         insertCharacter(token)
+                    } else if (token.type == TokenType.Comment) {
+                        //Insert a comment as the last child of the first element in the stack of open elements (the html element).
+                        val comment = CommentImpl((token as CommentToken).data)
+                        openElements.first().appendChild(comment)
                     } else if (token.type == TokenType.EndTag && "html" == (token as EndTagToken).tagName) {
                         //Check  for parse errors
                         switchTo(InsertionMode.afterAfterBody)
@@ -324,7 +338,10 @@ class Parser {
                     unhandledMode(InsertionMode.afterFrameset, token)
                 }
                 InsertionMode.afterAfterBody -> {
-                    if (token.type == TokenType.Character && isWhitespace((token as CharacterToken).data)) {
+                    if (token.type == TokenType.Comment) {
+                        val comment = CommentImpl((token as CommentToken).data)
+                        root.appendChild(comment)
+                    } else if (token.type == TokenType.Character && isWhitespace((token as CharacterToken).data)) {
                         //TODO: same rules as in body
                         //FIXME: reconstruct the active formatting elements
                         insertCharacter(token)
@@ -340,6 +357,16 @@ class Parser {
             }
         }
         return root
+    }
+
+    private fun insertComment(token: CommentToken) {
+        val data = token.data
+
+        //if position
+        val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()
+
+        val comment = CommentImpl(data)
+        adjustedInsertionLocation.appendChild(comment)
     }
 
     private fun insertCharacter(characterToken: CharacterToken) {
@@ -361,8 +388,8 @@ class Parser {
     private fun findTextNodeImmediatelyBefore(adjustedInsertionLocation: Node): Text? {
         if (adjustedInsertionLocation.childNodes.length > 0) {
             val node = adjustedInsertionLocation.childNodes.item(adjustedInsertionLocation.childNodes.length - 1)
-            if(node != null) {
-                if(node.nodeName == "#text") {
+            if (node != null) {
+                if (node.nodeName == "#text") {
                     return (node as Text)
                 }
             }
