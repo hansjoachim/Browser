@@ -7,11 +7,18 @@ class ParserTest {
 
     @Test
     fun should_parse_simple_example() {
-        val simpleExample = "<!DOCTYPE html><html><body></body></html>"
+        val simpleExample = "<!DOCTYPE html><html><body><div></div></body></html>"
         val parser = Parser()
         val document = parser.parse(simpleExample)
 
-        assertThat(document).isNotNull
-        assertThat(document.children).isNotEmpty
+        val expectedDOM = """#document
+	html
+		head
+		body
+			div
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
     }
+
 }

@@ -1,5 +1,13 @@
 package org.example
 
+import org.example.html.DocumentImpl
+import org.example.html.DocumentTypeImpl
+import org.example.html.HTMLElementImpl
+import org.example.html.HtmlDivElementImpl
+import org.w3c.dom.Document
+import org.w3c.dom.Element
+import org.w3c.dom.Node
+import org.w3c.dom.html.HTMLElement
 import java.lang.Character.isWhitespace
 
 class Parser {
@@ -17,21 +25,21 @@ class Parser {
         return parse(Tokenizer(document).tokenize())
     }
 
-    fun parse(originalTokens: List<Token>): Document {
+    private fun parse(originalTokens: List<Token>): Document {
         //A Document object has an associated parser cannot change the mode flag (a boolean). It is initially false.
-        val root = Document()
+        val root = DocumentImpl()
         val tokens: MutableList<Token> = originalTokens.toMutableList()
 
-        while (!tokens.isEmpty()) {
+        while (tokens.isNotEmpty()) {
             val token = tokens.removeFirst()
             when (currentMode) {
                 InsertionMode.initial -> {
                     if (token.type == TokenType.DOCTYPE) {
                         val doctype = (token as DOCTYPEToken)
-                        if ("html".equals(doctype.name)) {
+                        if ("html" == doctype.name) {
                             val documentType =
-                                DocumentType(doctype.name, doctype.publicIdentifier, doctype.systemIdentifier)
-                            root.children.add(documentType)
+                                DocumentTypeImpl(doctype.name, doctype.publicIdentifier, doctype.systemIdentifier)
+                            root.doctype = documentType
 
                             //deal with doctypes, various types and quirks...
 
@@ -45,10 +53,10 @@ class Parser {
                     if (token.type == TokenType.StartTag) {
                         val startTag = (token as StartTagToken)
 
-                        if ("html".equals(startTag.tagName)) {
-                            val e = Element(tagName = startTag.tagName)
-                            root.children.add(e)
-                            openElements.addLast(e)
+                        if ("html" == startTag.tagName) {
+                            val element = createElementFromTagName(startTag.tagName)
+                            root.appendChild(element)
+                            openElements.addLast(element)
                             switchTo(InsertionMode.beforeHead)
                         } else {
                             unhandledMode(InsertionMode.beforeHtml, token)
@@ -65,9 +73,9 @@ class Parser {
                         unhandledMode(InsertionMode.beforeHead, token)
                     } else if (token.type == TokenType.DOCTYPE) {
                         unhandledMode(InsertionMode.beforeHead, token)
-                    } else if (token.type == TokenType.StartTag && "html".equals((token as StartTagToken).tagName)) {
+                    } else if (token.type == TokenType.StartTag && "html" == (token as StartTagToken).tagName) {
                         unhandledMode(InsertionMode.beforeHead, token)
-                    } else if (token.type == TokenType.StartTag && "head".equals((token as StartTagToken).tagName)) {
+                    } else if (token.type == TokenType.StartTag && "head" == (token as StartTagToken).tagName) {
                         unhandledMode(InsertionMode.beforeHead, token)
                     } else if (token.type == TokenType.EndTag && listOf(
                             "head",
@@ -125,6 +133,71 @@ class Parser {
                         //Check stack and look for parse errors
                         switchTo(InsertionMode.afterBody)
                         //TODO: other cases
+                    } else if (token.type == TokenType.StartTag && listOf(
+                            "address",
+                            "article",
+                            "aside",
+                            "blockquote",
+                            "center",
+                            "details",
+                            "dialog",
+                            "dir",
+                            "div",
+                            "dl",
+                            "fieldset",
+                            "figcaption",
+                            "figure",
+                            "footer",
+                            "header",
+                            "hgroup",
+                            "main",
+                            "menu",
+                            "nav",
+                            "ol",
+                            "p",
+                            "section",
+                            "summary",
+                            "ul"
+                        ).contains((token as StartTagToken).tagName)
+                    ) {
+//                        if(openElementsHasAPElementInButtonScope()) {
+//                            closePElement()
+//                        }
+                        createHtmlElement(token)
+                    } else if (token.type == TokenType.EndTag && listOf(
+                            "address",
+                            "article",
+                            "aside",
+                            "blockquote",
+                            "button",
+                            "center",
+                            "details",
+                            "dialog",
+                            "dir",
+                            "div",
+                            "dl",
+                            "fieldset",
+                            "figcaption",
+                            "figure",
+                            "footer",
+                            "header",
+                            "hgroup",
+                            "listing",
+                            "main",
+                            "menu",
+                            "nav",
+                            "ol",
+                            "pre",
+                            "section",
+                            "summary",
+                            "ul"
+                        ).contains((token as EndTagToken).tagName)
+                    ) {
+                        //More stuff
+
+                        //FIXME: find matching tag before popping
+                        openElements.removeLast()
+
                     } else {
                         unhandledMode(InsertionMode.inBody, token)
                     }
@@ -193,12 +266,21 @@ class Parser {
     }
 
     private fun createHtmlElement(token: StartTagToken): Element {
-        val head = Element(tagName = token.tagName)
+        val head = createElementFromTagName(token.tagName)
 
         val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()
         adjustedInsertionLocation.appendChild(head)
         openElements.addLast(head)
         return head
+    }
+
+    private fun createElementFromTagName(tagName: String): HTMLElement {
+        if (tagName == "div") {
+            return HtmlDivElementImpl()
+        }
+
+        println("Didn't find more specific implementation for $tagName")
+        return HTMLElementImpl(tagName = tagName)
     }
 
     private fun findAppropriatePlaceForInsertingANode(): Node {
@@ -217,29 +299,4 @@ class Parser {
         println("Unhandled mode $mode for $token")
     }
 
-    //Inherit node??
-    class Document(val children: MutableList<Node> = mutableListOf())
-
-    interface EventTarget
-    open class Node : EventTarget {
-        val childNodes: MutableList<Node> = mutableListOf()
-        fun appendChild(node: Node) {
-            childNodes.add(node)
-        }
-    }
-
-    class DocumentType(
-        val name: DOMString,
-        val publicId: DOMString,
-        val systemId: DOMString
-    ) : Node()
-
-    class Element(
-        val namespaceURI: DOMString? = null,
-        val prefix: DOMString? = null,
-        //  val localName: DOMString,
-        val tagName: DOMString
-    ) : Node()
 }
-
-typealias DOMString = String

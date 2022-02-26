@@ -25,5 +25,8 @@ private fun goTo(uri: URI) {
     val tokens = Tokenizer(result).tokenize()
 
     println("tokenized to $tokens")
+
+    val document = Parser().parse(result)
+    DOMDebugger.printDOMTree(document)
 }
 
