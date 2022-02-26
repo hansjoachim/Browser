@@ -284,7 +284,7 @@ class Tokenizer(document: String) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
                     } else {
-                        unhandledCase(TokenizationState.SelfClosingStartTagState, ' ')
+                        unhandledCase(TokenizationState.SelfClosingStartTagState, consumedCharacter)
                     }
                 }
                 TokenizationState.BogusCommentState -> {

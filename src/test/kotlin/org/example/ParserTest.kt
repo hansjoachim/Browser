@@ -21,4 +21,40 @@ class ParserTest {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
+    @Test
+    fun should_parse_example_with_text() {
+        val simpleExample = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My title</title>
+</head>
+<body>
+<h1>Welcome!</h1>
+</body>
+</html>
+"""
+        val parser = Parser()
+        val document = parser.parse(simpleExample)
+
+        val expectedDOM = """#document
+	html
+		head
+			#text
+			title
+				#text
+			#text
+		#text
+		body
+			#text
+			h1
+				#text
+			#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    //TODO: test with comments
+
 }
