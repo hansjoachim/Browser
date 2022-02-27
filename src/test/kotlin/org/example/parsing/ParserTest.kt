@@ -1,4 +1,4 @@
-package org.example
+package org.example.parsing
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Ignore
@@ -9,8 +9,7 @@ class ParserTest {
     @Test
     fun should_parse_simple_example() {
         val simpleExample = "<!DOCTYPE html><html><body><div></div></body></html>"
-        val parser = Parser()
-        val document = parser.parse(simpleExample)
+        val document = Parser(simpleExample).parse()
 
         val expectedDOM = """#document
 	html
@@ -35,8 +34,7 @@ class ParserTest {
 </body>
 </html>
 """
-        val parser = Parser()
-        val document = parser.parse(simpleExample)
+        val document = Parser(simpleExample).parse()
 
         val expectedDOM = """#document
 	html
@@ -75,8 +73,7 @@ class ParserTest {
 </html>
 <!-- Some comment at the end -->
 """
-        val parser = Parser()
-        val document = parser.parse(simpleExample)
+        val document = Parser(simpleExample).parse()
 
         val expectedDOM = """#document
 	#comment
@@ -115,8 +112,7 @@ class ParserTest {
 <body />
 </html>
 """
-        val parser = Parser()
-        val document = parser.parse(simpleExample)
+        val document = Parser(simpleExample).parse()
 
         val expectedDOM = """#document
 	html
@@ -144,8 +140,7 @@ class ParserTest {
 </body>
 </html>
 """
-        val parser = Parser()
-        val document = parser.parse(simpleExample)
+        val document = Parser(simpleExample).parse()
 
         val expectedDOM = """#document
 	html
@@ -182,8 +177,7 @@ function comparison(a, b)  {
 </body>
 </html>
 """
-        val parser = Parser()
-        val document = parser.parse(simpleExample)
+        val document = Parser(simpleExample).parse()
 
         val expectedDOM = """#document
 	html
@@ -224,8 +218,7 @@ function comparison(a, b)  {
 </body>
 </html>
 """
-        val parser = Parser()
-        val document = parser.parse(simpleExample)
+        val document = Parser(simpleExample).parse()
 
         val expectedDOM = """#document
 	html

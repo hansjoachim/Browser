@@ -1,4 +1,4 @@
-package org.example
+package org.example.parsing
 
 import org.w3c.dom.Node
 

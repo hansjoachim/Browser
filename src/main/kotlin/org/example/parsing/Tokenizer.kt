@@ -1,4 +1,4 @@
-package org.example
+package org.example.parsing
 
 import java.io.ByteArrayInputStream
 import java.io.InputStream
@@ -8,19 +8,33 @@ class Tokenizer(document: String) {
     //TODO: stringstream instead of bytes to skip conversion back and forth?
     private val inputStream: InputStream = ByteArrayInputStream(document.toByteArray(UTF_8))
     private var currentToken: Token? = null
-    private var tokens: MutableList<Token> = mutableListOf()
+    internal var emittedToken: Token? = null
 
     private var state = TokenizationState.DataState
 
-    fun tokenize(): List<Token> {
-        tokenize(TokenizationState.DataState)
-        return tokens
+    /**
+     * For test purposes. Other consumers should use nextToken
+     * This methode will NOT handle all cases which depend on the parser adjusting tokenization state!
+     */
+    internal fun allTokens(): List<Token> {
+        val allTokens: MutableList<Token> = mutableListOf()
+
+        while (EndOfFileToken() !in allTokens) {
+            allTokens.add(nextToken())
+        }
+
+        return allTokens
     }
 
-    private fun tokenize(initialState: TokenizationState) {
-        switchTo(initialState)
+    fun nextToken(): Token {
+        val emitted = tokenize()
+        emittedToken = null
+        return emitted
+    }
 
-        do {
+    private fun tokenize(): Token {
+
+        while (emittedToken == null) {
             when (state) {
                 TokenizationState.DataState -> {
 
@@ -29,9 +43,7 @@ class Tokenizer(document: String) {
                     if (consumedCharacter.matches('<')) {
                         switchTo(TokenizationState.TagOpenState)
                     } else if (consumedCharacter.isEndOfFile()) {
-                        currentToken = EndOfFileToken()
-                        emitCurrentToken()
-                        return
+                        emitEndOfFileToken()
                     } else {
                         currentToken = CharacterToken(consumedCharacter)
                         emitCurrentToken()
@@ -511,7 +523,9 @@ class Tokenizer(document: String) {
                     unhandledCase(TokenizationState.NumericCharacterReferenceEndState, ' ')
                 }
             }
-        } while (EndOfFileToken() !in tokens)
+        }
+
+        return emittedToken as Token
     }
 
     private fun reconsumeIn(newState: TokenizationState) {
@@ -529,23 +543,22 @@ class Tokenizer(document: String) {
 
     private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char) {
         // There's probably a more spec-compliant way to deal with unexpected cases.
-        // For now though, emit whatever we were working on and insert an EndOfFile to break the endless loop and note where things went wrong
-        if (currentToken != null) {
-            emitCurrentToken()
-        }
-        tokens.add(EndOfFileToken())
-
+        // For now though, dump whatever we were working on and emit an EndOfFile to break the endless loop and note where things went wrong
         println("Unhandled case in $state: $unhandledCharacter")
+        println("Droppped token: $currentToken")
         println("Not tokenized: " + String(inputStream.readNBytes(100)) + "(...)")
+
+        emitEndOfFileToken()
     }
 
     private fun emitCurrentToken() {
-        tokens.add(currentToken!!)
+        val local = currentToken!!
         currentToken = null
+        emittedToken = local
     }
 
     private fun emitEndOfFileToken() {
-        tokens.add(EndOfFileToken())
+        emittedToken = EndOfFileToken()
     }
 
     private fun consumeCharacters(string: String) {

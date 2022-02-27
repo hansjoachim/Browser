@@ -1,4 +1,4 @@
-package org.example
+package org.example.parsing
 
 import org.example.html.*
 import org.w3c.dom.Document
@@ -8,7 +8,9 @@ import org.w3c.dom.Text
 import org.w3c.dom.html.HTMLElement
 import java.lang.Character.isWhitespace
 
-class Parser {
+class Parser(private val document: String) {
+
+    private val tokenizer = Tokenizer(document)
 
     private val scripting: Boolean = false
     private var framsetOk: Boolean = true
@@ -20,18 +22,14 @@ class Parser {
     private var headElementPointer: Element? = null
     private val openElements: ArrayDeque<Node> = ArrayDeque()
 
-
-    fun parse(document: String): Document {
-        return parse(Tokenizer(document).tokenize())
-    }
-
-    private fun parse(originalTokens: List<Token>): Document {
+    fun parse(): Document {
         //A Document object has an associated parser cannot change the mode flag (a boolean). It is initially false.
         val root = DocumentImpl()
-        val tokens: MutableList<Token> = originalTokens.toMutableList()
 
-        while (tokens.isNotEmpty()) {
-            val token = tokens.removeFirst()
+
+
+        do {
+            val token = tokenizer.nextToken()
             when (currentMode) {
                 InsertionMode.initial -> {
                     if (token is CharacterToken && isWhitespace(token.data)) {
@@ -113,8 +111,7 @@ class Parser {
                         headElementPointer = head
                         switchTo(InsertionMode.inHead)
 
-                        //    Reprocess the current token.
-                        tokens.add(0, token)
+                        reprocessCurrentToken(token)
                     }
                 }
                 InsertionMode.inHead -> {
@@ -163,8 +160,7 @@ class Parser {
 
                         switchTo(InsertionMode.afterHead)
 
-                        //Reprocess the token.
-                        tokens.add(0, token)
+                        reprocessCurrentToken(token)
                     }
                 }
                 InsertionMode.inHeadNoscript -> {
@@ -373,6 +369,7 @@ class Parser {
                         //TODO: other cases
                     } else if (token is EndOfFileToken) {
                         //stop parsing
+                        return root
                     } else {
                         unhandledMode(InsertionMode.afterBody, token)
                     }
@@ -393,6 +390,7 @@ class Parser {
                         insertCharacter(token)
                     } else if (token is EndOfFileToken) {
                         //Stop parsing
+                        return root
                     } else {
                         unhandledMode(InsertionMode.afterAfterBody, token)
                     }
@@ -401,8 +399,15 @@ class Parser {
                     unhandledMode(InsertionMode.afterAfterFrameset, token)
                 }
             }
-        }
+        } while (token !is EndOfFileToken)
+
+        println("Stopped parsing due to end of file, should probably be handled by some mode??")
         return root
+    }
+
+    private fun reprocessCurrentToken(token: Token) {
+        //A bit hacky but puts it back so that it is the next token returned :D
+        tokenizer.emittedToken = token
     }
 
     private fun insertComment(token: CommentToken) {
