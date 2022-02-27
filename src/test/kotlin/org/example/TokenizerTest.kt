@@ -1,6 +1,7 @@
 package org.example
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.Ignore
 import org.junit.Test
 
 class TokenizerTest {
@@ -175,6 +176,32 @@ class TokenizerTest {
                     Attribute("id", "test"),
                     Attribute("class", "some class"),
                     Attribute("lang", "en-US"),
+                )
+            ),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Ignore("FIXME: fails to tokenize when attributes are squashed togheter")
+    @Test
+    fun should_tokenize_tags_with_squashed_attributes() {
+        val simpleExample = "<!DOCTYPE html><html><body id='test'class='some class'></body></html>"
+
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken(
+                "body", mutableListOf(
+                    Attribute("id", "test"),
+                    Attribute("class", "some class"),
                 )
             ),
             EndTagToken("body"),

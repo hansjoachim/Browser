@@ -1,6 +1,7 @@
 package org.example
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.Ignore
 import org.junit.Test
 
 class ParserTest {
@@ -100,6 +101,160 @@ class ParserTest {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
-    //TODO: meta tags
+    @Ignore("FIXME: support meta and link tags")
+    @Test
+    fun should_parse_example_with_meta_tags() {
+        val simpleExample = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="referrer" content="origin">
+    <link href="main.css" rel="stylesheet">
+</head>
+<body />
+</html>
+"""
+        val parser = Parser()
+        val document = parser.parse(simpleExample)
 
+        val expectedDOM = """#document
+	html
+		head
+			meta
+			meta
+			link
+		body
+			#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    @Ignore("FIXME: ignored tag, should be easy if we ignore the scripting for now")
+    @Test
+    fun should_parse_noscript() {
+        val simpleExample = """
+<!DOCTYPE html>
+<html>
+<body>
+    <noscript>You can only see this when scripting is disabled</noscript>
+</body>
+</html>
+"""
+        val parser = Parser()
+        val document = parser.parse(simpleExample)
+
+        val expectedDOM = """#document
+	html
+		head
+		body
+			noscript
+				#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    //TODO : this case is in parser instead of tokenizer since the parser is the one giving the signal to the tokenizer
+    @Ignore("FIXME: right now script content can break in strange ways if it stumble across < symbols. Should parse this as pure text to fix those errors ")
+    @Test
+    fun should_parse_script() {
+        val simpleExample = """
+<!DOCTYPE html>
+<html>
+<head>
+<script>/*Javascript comment. And it can even include <!-- ignored html comments --> */
+function comparison(a, b)  {
+    return a < b
+}
+</script>
+</head>
+</body>
+</html>
+"""
+        val parser = Parser()
+        val document = parser.parse(simpleExample)
+
+        val expectedDOM = """#document
+	html
+		head
+			script
+		body
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+
+    //TODO: expected this would break with the simple popping of current element. Let's revisit this in a while
+    @Test
+    fun should_append_nested_elements_correctly() {
+        val simpleExample = """
+<!DOCTYPE html>
+<html>
+<body>
+    <div>
+        <div>
+            <div></div>
+        </div>
+        <div>
+            <div></div>
+            <div></div>
+        </div>
+    </div>
+    <div>
+        <div>
+            <div></div>
+            <div></div>
+        </div>
+        <div>
+            <div></div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        val parser = Parser()
+        val document = parser.parse(simpleExample)
+
+        val expectedDOM = """#document
+	html
+		head
+		body
+			#text
+			div
+				#text
+				div
+					#text
+					div
+					#text
+				#text
+				div
+					#text
+					div
+					#text
+					div
+					#text
+				#text
+			#text
+			div
+				#text
+				div
+					#text
+					div
+					#text
+					div
+					#text
+				#text
+				div
+					#text
+					div
+					#text
+				#text
+			#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
 }
