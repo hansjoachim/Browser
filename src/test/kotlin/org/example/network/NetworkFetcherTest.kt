@@ -5,7 +5,6 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
-import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpHeaders
 import java.net.http.HttpResponse
@@ -24,7 +23,7 @@ class NetworkFetcherTest {
         } returns mockHttpResponse(body = "Hello world!")
         val network = NetworkFetcher(mockClient)
 
-        val response = network.getRequest(URI("http://example.com"))
+        val response = network.getRequest("http://example.com")
 
         assertThat(response).isEqualTo("Hello world!")
         verify(exactly = 1) { mockClient.send(any(), eq(HttpResponse.BodyHandlers.ofString())) }
@@ -43,7 +42,7 @@ class NetworkFetcherTest {
         )
         val network = NetworkFetcher(mockClient)
 
-        val response = network.getRequest(URI("http://example.com"))
+        val response = network.getRequest("http://example.com")
 
         assertThat(response).isEqualTo("Second")
 
