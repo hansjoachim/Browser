@@ -1,17 +1,9 @@
 package org.example
 
-open class Token(val type: TokenType)
+open class Token
 
-enum class TokenType {
-    DOCTYPE,
-    StartTag,
-    EndTag,
-    Comment,
-    Character,
-    EndOfFile
-}
 
-class DOCTYPEToken(var name: String) : Token(TokenType.DOCTYPE) {
+class DOCTYPEToken(var name: String) : Token() {
     val publicIdentifier: String = "missing"
     val systemIdentifier: String = "missing"
     val forceQuirks: String = "off"
@@ -74,9 +66,8 @@ class Attribute(
 open class TagToken(
     var tagName: String,
     var attributes: MutableList<Attribute> = mutableListOf(),
-    var selfClosing: Boolean = false,
-    type: TokenType
-) : Token(type) {
+    var selfClosing: Boolean = false
+) : Token() {
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -105,19 +96,19 @@ class StartTagToken(
     attributes: MutableList<Attribute> = mutableListOf(),
     selfClosing: Boolean = false
 ) :
-    TagToken(tagName, attributes, selfClosing, type = TokenType.StartTag) {
+    TagToken(tagName, attributes, selfClosing) {
     override fun toString(): String {
         return "StartTagToken(tagName='$tagName', selfClosing=$selfClosing, attributes=$attributes)"
     }
 }
 
-class EndTagToken(tagName: String = "") : TagToken(tagName, type = TokenType.EndTag) {
+class EndTagToken(tagName: String = "") : TagToken(tagName) {
     override fun toString(): String {
         return "EndTagToken(tagName='$tagName', selfClosing=$selfClosing, attributes=$attributes)"
     }
 }
 
-class CommentToken(var data: String = "") : Token(TokenType.Comment) {
+class CommentToken(var data: String = "") : Token() {
     override fun toString(): String {
         return "CommentToken(data='$data')"
     }
@@ -138,7 +129,7 @@ class CommentToken(var data: String = "") : Token(TokenType.Comment) {
     }
 }
 
-class CharacterToken(var data: Char) : Token(TokenType.Character) {
+class CharacterToken(var data: Char) : Token() {
     constructor(inputCharacter: InputCharacter) :
             this(inputCharacter.character)
 
@@ -163,7 +154,7 @@ class CharacterToken(var data: Char) : Token(TokenType.Character) {
 
 }
 
-class EndOfFileToken : Token(TokenType.EndOfFile) {
+class EndOfFileToken : Token() {
     override fun toString(): String {
         return "EndOfFileToken()"
     }
