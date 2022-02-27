@@ -127,6 +127,24 @@ class Parser {
                         insertCharacter(token)
                     } else if (token.type == TokenType.Comment) {
                         insertComment((token as CommentToken))
+                    } else if (token.type == TokenType.StartTag && listOf(
+                            "base",
+                            "basefont",
+                            "bgsound",
+                            "link"
+                        ).contains((token as StartTagToken).tagName)
+                    ) {
+                        //FIXME
+                        unhandledMode(InsertionMode.inHead, token)
+                    } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "meta") {
+                        //FIXME
+                        unhandledMode(InsertionMode.inHead, token)
+                    } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "noscript") {
+                        //FIXME
+                        unhandledMode(InsertionMode.inHead, token)
+                    } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "script") {
+                        //FIXME
+                        unhandledMode(InsertionMode.inHead, token)
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "title") {
                         RCDATAparsing(token)
                     } else if (token.type == TokenType.EndTag && (token as EndTagToken).tagName == "head") {
@@ -398,7 +416,7 @@ class Parser {
     }
 
     private fun RCDATAparsing(token: StartTagToken) {
-        val element = createHtmlElement(token)
+        createHtmlElement(token)
         //FIXME: switch tokenizer mode
         originalInsertionMode = currentMode
         switchTo(InsertionMode.text)
@@ -414,22 +432,31 @@ class Parser {
     }
 
     private fun createElementFromTagName(tagName: String): HTMLElement {
-        if (tagName == "head") {
-            return HTMLHeadElementImpl()
-        } else if (tagName == "title") {
-            return HTMLTitleElementImpl()
-        } else if (tagName == "body") {
-            return HTMLBodyElementImpl()
-        } else if (tagName == "div") {
-            return HtmlDivElementImpl()
+        when (tagName) {
+            "head" -> {
+                return HTMLHeadElementImpl()
+            }
+            "title" -> {
+                return HTMLTitleElementImpl()
+            }
+            "body" -> {
+                return HTMLBodyElementImpl()
+            }
+            "div" -> {
+                return HtmlDivElementImpl()
+            }
+            "p" -> {
+                return HTMLParagraphElementImpl()
+            }
+            else -> {
+                println("Didn't find more specific implementation for $tagName")
+                return HTMLElementImpl(tagName = tagName)
+            }
         }
-
-        println("Didn't find more specific implementation for $tagName")
-        return HTMLElementImpl(tagName = tagName)
     }
 
     private fun findAppropriatePlaceForInsertingANode(): Node {
-        var adjustedInsertionLocation: Node? = null
+        var adjustedInsertionLocation: Node?
 
         //if override
         val target = openElements.last()
@@ -440,7 +467,7 @@ class Parser {
         }
 
         //if template
-        return adjustedInsertionLocation!!
+        return adjustedInsertionLocation
     }
 
     private fun switchTo(mode: InsertionMode) {
