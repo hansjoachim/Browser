@@ -10,6 +10,7 @@ import java.lang.Character.isWhitespace
 
 class Parser {
 
+    private val scripting: Boolean = false
     private var framsetOk: Boolean = true
     private val fosterParenting = false
 
@@ -92,7 +93,7 @@ class Parser {
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "html") {
                         unhandledMode(InsertionMode.beforeHead, token)
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "head") {
-                        val head = createHtmlElement(token)
+                        val head = insertHtmlElement(token)
 
                         headElementPointer = head
                         switchTo(InsertionMode.inHead)
@@ -108,7 +109,7 @@ class Parser {
                         unhandledMode(InsertionMode.beforeHead, token)
                     } else {
                         val fakeHead = StartTagToken("head")
-                        val head = createHtmlElement(fakeHead)
+                        val head = insertHtmlElement(fakeHead)
 
                         headElementPointer = head
                         switchTo(InsertionMode.inHead)
@@ -139,14 +140,21 @@ class Parser {
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "meta") {
                         //FIXME
                         unhandledMode(InsertionMode.inHead, token)
-                    } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "noscript") {
-                        //FIXME
-                        unhandledMode(InsertionMode.inHead, token)
+                    } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "title") {
+                        genericRCDATAparsing(token)
+                    } else if ((token.type == TokenType.StartTag && (token as StartTagToken).tagName == "noscript" && scripting)
+                        || (token.type == TokenType.StartTag && listOf(
+                            "noframes",
+                            "style"
+                        ).contains((token as StartTagToken).tagName))
+                    ) {
+                        genericRawTextElementParsing(token)
+                    } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "noscript" && !scripting) {
+                        insertHtmlElement(token)
+                        switchTo(InsertionMode.inHeadNoscript)
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "script") {
                         //FIXME
                         unhandledMode(InsertionMode.inHead, token)
-                    } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "title") {
-                        RCDATAparsing(token)
                     } else if (token.type == TokenType.EndTag && (token as EndTagToken).tagName == "head") {
                         openElements.removeLast()
                         switchTo(InsertionMode.afterHead)
@@ -161,7 +169,16 @@ class Parser {
                     }
                 }
                 InsertionMode.inHeadNoscript -> {
-                    unhandledMode(InsertionMode.inHeadNoscript, token)
+                    if (token.type == TokenType.EndTag && (token as EndTagToken).tagName == "noscript") {
+                        openElements.removeLast()
+                        //TODO: update current node to head
+                        switchTo(InsertionMode.inHead)
+                    } else if (token.type == TokenType.Comment) {
+                        //Like in head
+                        insertComment((token as CommentToken))
+                    } else {
+                        unhandledMode(InsertionMode.inHeadNoscript, token)
+                    }
                 }
                 InsertionMode.afterHead -> {
                     if (token.type == TokenType.Character && isWhitespace((token as CharacterToken).data)) {
@@ -169,7 +186,7 @@ class Parser {
                     } else if (token.type == TokenType.Comment) {
                         insertComment((token as CommentToken))
                     } else if (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "body") {
-                        createHtmlElement(token)
+                        insertHtmlElement(token)
                         //Set the Document's awaiting parser-inserted body flag to false.
 
                         framsetOk = false
@@ -227,7 +244,7 @@ class Parser {
 //                        if(openElementsHasAPElementInButtonScope()) {
 //                            closePElement()
 //                        }
-                        createHtmlElement(token)
+                        insertHtmlElement(token)
                     } else if (token.type == TokenType.StartTag && listOf(
                             "h1",
                             "h2",
@@ -242,7 +259,7 @@ class Parser {
 //                        }
 
                         //TODO: if current node is another header, that's a parse error
-                        createHtmlElement(token)
+                        insertHtmlElement(token)
 
                     } else if (token.type == TokenType.EndTag && listOf(
                             "address",
@@ -287,6 +304,16 @@ class Parser {
                         ).contains((token as EndTagToken).tagName)
                     ) {
                         //FIXME: only slime
+                        openElements.removeLast()
+                    } else if ((token.type == TokenType.StartTag && (token as StartTagToken).tagName == "noembed") ||
+                        (token.type == TokenType.StartTag && (token as StartTagToken).tagName == "noscript") && scripting
+                    ) {
+                        genericRawTextElementParsing(token)
+                    } else if (token.type == TokenType.StartTag) {
+                        //TODO: Reconstruct the active formatting elements, if any.
+                        insertHtmlElement((token as StartTagToken))
+                    } else if (token.type == TokenType.EndTag) {
+                        //FIXME deal with the stack
                         openElements.removeLast()
                     } else {
                         unhandledMode(InsertionMode.inBody, token)
@@ -345,6 +372,8 @@ class Parser {
                         //Check  for parse errors
                         switchTo(InsertionMode.afterAfterBody)
                         //TODO: other cases
+                    } else if (token.type == TokenType.EndOfFile) {
+                        //stop parsing
                     } else {
                         unhandledMode(InsertionMode.afterBody, token)
                     }
@@ -415,14 +444,18 @@ class Parser {
         return null
     }
 
-    private fun RCDATAparsing(token: StartTagToken) {
-        createHtmlElement(token)
+    private fun genericRawTextElementParsing(token: StartTagToken) {
+        genericRCDATAparsing(token)
+    }
+
+    private fun genericRCDATAparsing(token: StartTagToken) {
+        insertHtmlElement(token)
         //FIXME: switch tokenizer mode
         originalInsertionMode = currentMode
         switchTo(InsertionMode.text)
     }
 
-    private fun createHtmlElement(token: StartTagToken): Element {
+    private fun insertHtmlElement(token: StartTagToken): Element {
         val element = createElementFromTagName(token.tagName)
 
         val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()

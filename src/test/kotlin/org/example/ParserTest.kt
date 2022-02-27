@@ -131,14 +131,16 @@ class ParserTest {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
-    @Ignore("FIXME: ignored tag, should be easy if we ignore the scripting for now")
     @Test
     fun should_parse_noscript() {
         val simpleExample = """
 <!DOCTYPE html>
 <html>
+<head>
+<noscript><!-- This is only added when scripting is disabled --></noscript>
+</head>
 <body>
-    <noscript>You can only see this when scripting is disabled</noscript>
+<noscript><!-- ditto --></noscript>
 </body>
 </html>
 """
@@ -148,9 +150,16 @@ class ParserTest {
         val expectedDOM = """#document
 	html
 		head
-		body
+			#text
 			noscript
-				#text
+				#comment
+			#text
+		#text
+		body
+			#text
+			noscript
+				#comment
+			#text
 """
         val tree = DOMDebugger.getDOMTree(document)
         assertThat(tree).isEqualTo(expectedDOM)
