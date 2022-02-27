@@ -186,7 +186,6 @@ class TokenizerTest {
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
 
-    @Ignore("FIXME: fails to tokenize when attributes are squashed togheter")
     @Test
     fun should_tokenize_tags_with_squashed_attributes() {
         val simpleExample = "<!DOCTYPE html><html><body id='test'class='some class'></body></html>"

@@ -261,6 +261,7 @@ class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.AfterAttributeValueQuotedState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.isWhitespace()) {
@@ -270,8 +271,12 @@ class Tokenizer(document: String) {
                     } else if (consumedCharacter.matches('>')) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        //This is an eof-in-tag parse error.
+                        emitEndOfFileToken()
                     } else {
-                        unhandledCase(TokenizationState.AfterAttributeValueQuotedState, ' ')
+                        //This is a missing-whitespace-between-attributes parse error.
+                        reconsumeIn(TokenizationState.BeforeAttributeNameState)
                     }
                 }
                 TokenizationState.SelfClosingStartTagState -> {
@@ -537,6 +542,10 @@ class Tokenizer(document: String) {
     private fun emitCurrentToken() {
         tokens.add(currentToken!!)
         currentToken = null
+    }
+
+    private fun emitEndOfFileToken() {
+        tokens.add(EndOfFileToken())
     }
 
     private fun consumeCharacters(string: String) {
