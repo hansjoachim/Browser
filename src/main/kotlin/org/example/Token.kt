@@ -139,6 +139,9 @@ class CommentToken(var data: String = "") : Token(TokenType.Comment) {
 }
 
 class CharacterToken(var data: Char) : Token(TokenType.Character) {
+    constructor(inputCharacter: InputCharacter) :
+            this(inputCharacter.character)
+
     override fun toString(): String {
         return "CharacterToken(data='$data')"
     }

@@ -2,7 +2,6 @@ package org.example
 
 import java.io.ByteArrayInputStream
 import java.io.InputStream
-import java.lang.Character.*
 import kotlin.text.Charsets.UTF_8
 
 class Tokenizer(document: String) {
@@ -25,18 +24,14 @@ class Tokenizer(document: String) {
             when (state) {
                 TokenizationState.DataState -> {
 
-                    //FIXME: spec compliant order somehow
-                    val hasNextCharacter = hasNextCharacter()
+                    val consumedCharacter = consumeCharacter()
 
-                    if (!hasNextCharacter) {
+                    if (consumedCharacter.matches('<')) {
+                        switchTo(TokenizationState.TagOpenState)
+                    } else if (consumedCharacter.isEndOfFile()) {
                         currentToken = EndOfFileToken()
                         emitCurrentToken()
                         return
-                    }
-                    val consumedCharacter = consumeCharacter()
-
-                    if (consumedCharacter == '<') {
-                        switchTo(TokenizationState.TagOpenState)
                     } else {
                         currentToken = CharacterToken(consumedCharacter)
                         emitCurrentToken()
@@ -58,11 +53,11 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '!') {
+                    if (consumedCharacter.matches('!')) {
                         switchTo(TokenizationState.MarkupDeclarationOpenState)
-                    } else if (consumedCharacter == '/') {
+                    } else if (consumedCharacter.matches('/')) {
                         switchTo(TokenizationState.EndTagOpenState)
-                    } else if (isAlphabetic(consumedCharacter.code)) {
+                    } else if (consumedCharacter.isAlpha()) {
                         currentToken = StartTagToken()
 
                         reconsumeIn(TokenizationState.TagNameState)
@@ -74,7 +69,7 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (isAlphabetic(consumedCharacter.code)) {
+                    if (consumedCharacter.isAlpha()) {
                         currentToken = EndTagToken("")
                         reconsumeIn(TokenizationState.TagNameState)
                     }
@@ -82,17 +77,17 @@ class Tokenizer(document: String) {
                 TokenizationState.TagNameState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (isWhitespace(consumedCharacter)) {
+                    if (consumedCharacter.isWhitespace()) {
                         switchTo(TokenizationState.BeforeAttributeNameState)
-                    } else if (consumedCharacter == '/') {
+                    } else if (consumedCharacter.matches('/')) {
                         switchTo(TokenizationState.SelfClosingStartTagState)
-                    } else if (consumedCharacter == '>') {
+                    } else if (consumedCharacter.matches('>')) {
                         emitCurrentToken()
                         switchTo(TokenizationState.DataState)
-                    } else if (isUpperCase(consumedCharacter.code)) {
-                        (currentToken as TagToken).tagName += toLowerCase(consumedCharacter)
+                    } else if (consumedCharacter.isUpperCase()) {
+                        (currentToken as TagToken).tagName += consumedCharacter.toLowerCase()
                     } else {
-                        (currentToken as TagToken).tagName += consumedCharacter
+                        (currentToken as TagToken).tagName += consumedCharacter.character
                     }
                 }
                 TokenizationState.RCDATALessThanSignState -> {
@@ -168,9 +163,9 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (isWhitespace(consumedCharacter)) {
+                    if (consumedCharacter.isWhitespace()) {
                         //ignore
-                    } else if (consumedCharacter == '/' || consumedCharacter == '>') {
+                    } else if (consumedCharacter.matches('/') || consumedCharacter.matches('>')) {
                         reconsumeIn(TokenizationState.AfterAttributeNameState)
                     } else {
                         (currentToken as TagToken).attributes.add(Attribute())
@@ -181,26 +176,29 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (isWhitespace(consumedCharacter) || consumedCharacter == '/' || consumedCharacter == '>') {
+                    if (consumedCharacter.isWhitespace()
+                        || consumedCharacter.matches('/')
+                        || consumedCharacter.matches('>')
+                    ) {
                         reconsumeIn(TokenizationState.AfterAttributeNameState)
-                    } else if (consumedCharacter == '=') {
+                    } else if (consumedCharacter.matches('=')) {
                         switchTo(TokenizationState.BeforeAttributeValueState)
                     } else {
                         val currentAttribute = (currentToken as TagToken).attributes.last()
-                        currentAttribute.attributeName += consumedCharacter
+                        currentAttribute.attributeName += consumedCharacter.character
                     }
                 }
                 TokenizationState.AfterAttributeNameState -> {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (isWhitespace((consumedCharacter))) {
+                    if (consumedCharacter.isWhitespace()) {
                         //ignore
-                    } else if (consumedCharacter == '/') {
+                    } else if (consumedCharacter.matches('/')) {
                         switchTo(TokenizationState.SelfClosingStartTagState)
-                    } else if (consumedCharacter == '=') {
+                    } else if (consumedCharacter.matches('=')) {
                         switchTo(TokenizationState.BeforeAttributeValueState)
-                    } else if (consumedCharacter == '>') {
+                    } else if (consumedCharacter.matches('>')) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
                         //TODO: EOF case
@@ -213,13 +211,13 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (isWhitespace(consumedCharacter)) {
+                    if (consumedCharacter.isWhitespace()) {
                         //Ignore
-                    } else if (consumedCharacter == '"') {
+                    } else if (consumedCharacter.matches('"')) {
                         switchTo(TokenizationState.AttributeValueDoubleQuotedState)
-                    } else if (consumedCharacter == '\'') {
+                    } else if (consumedCharacter.matches('\'')) {
                         switchTo(TokenizationState.AttributeValueSingleQuotedState)
-                    } else if (consumedCharacter == '>') {
+                    } else if (consumedCharacter.matches('>')) {
                         //This is a missing-attribute-value parse error.
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
@@ -230,46 +228,46 @@ class Tokenizer(document: String) {
                 TokenizationState.AttributeValueDoubleQuotedState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '"') {
+                    if (consumedCharacter.matches('"')) {
                         switchTo(TokenizationState.AfterAttributeValueQuotedState)
                         //TODO: more cases
                     } else {
                         val currentAttribute = (currentToken as TagToken).attributes.last()
-                        currentAttribute.value += consumedCharacter
+                        currentAttribute.value += consumedCharacter.character
                     }
                 }
                 TokenizationState.AttributeValueSingleQuotedState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '\'') {
+                    if (consumedCharacter.matches('\'')) {
                         switchTo(TokenizationState.AfterAttributeValueQuotedState)
                         //TODO: more cases
                     } else {
                         val currentAtribute = (currentToken as TagToken).attributes.last()
-                        currentAtribute.value += consumedCharacter
+                        currentAtribute.value += consumedCharacter.character
                     }
                 }
                 TokenizationState.AttributeValueUnquotedState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (isWhitespace(consumedCharacter)) {
+                    if (consumedCharacter.isWhitespace()) {
                         switchTo(TokenizationState.BeforeAttributeNameState)
-                    } else if (consumedCharacter == '>') {
+                    } else if (consumedCharacter.matches('>')) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
                     } else {
                         val currentAttribute = (currentToken as TagToken).attributes.last()
-                        currentAttribute.value += consumedCharacter
+                        currentAttribute.value += consumedCharacter.character
                     }
                 }
                 TokenizationState.AfterAttributeValueQuotedState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (isWhitespace(consumedCharacter)) {
+                    if (consumedCharacter.isWhitespace()) {
                         switchTo(TokenizationState.BeforeAttributeNameState)
-                    } else if (consumedCharacter == '/') {
+                    } else if (consumedCharacter.matches('/')) {
                         switchTo(TokenizationState.SelfClosingStartTagState)
-                    } else if (consumedCharacter == '>') {
+                    } else if (consumedCharacter.matches('>')) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
                     } else {
@@ -279,7 +277,7 @@ class Tokenizer(document: String) {
                 TokenizationState.SelfClosingStartTagState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '>') {
+                    if (consumedCharacter.matches('>')) {
                         (currentToken as StartTagToken).selfClosing = true
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
@@ -306,18 +304,14 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    when (consumedCharacter) {
-                        '-' -> {
-                            switchTo(TokenizationState.CommentStartDashState)
-                        }
-                        '>' -> {
-                            //This is an abrupt-closing-of-empty-comment parse error.
-                            switchTo(TokenizationState.DataState)
-                            emitCurrentToken()
-                        }
-                        else -> {
-                            reconsumeIn(TokenizationState.CommentState)
-                        }
+                    if (consumedCharacter.matches('-')) {
+                        switchTo(TokenizationState.CommentStartDashState)
+                    } else if (consumedCharacter.matches('>')) {
+                        //This is an abrupt-closing-of-empty-comment parse error.
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else {
+                        reconsumeIn(TokenizationState.CommentState)
                     }
                 }
                 TokenizationState.CommentStartDashState -> {
@@ -326,27 +320,23 @@ class Tokenizer(document: String) {
                 TokenizationState.CommentState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    when (consumedCharacter) {
-                        '<' -> {
-                            (currentToken as CommentToken).data += consumedCharacter
-                            switchTo(TokenizationState.CommentLessThanSignState)
-                        }
-                        '-' -> {
-                            switchTo(TokenizationState.CommentEndDashState)
-                        }
-                        else -> {
-                            (currentToken as CommentToken).data += consumedCharacter
-                        }
+                    if (consumedCharacter.matches('<')) {
+                        (currentToken as CommentToken).data += consumedCharacter.character
+                        switchTo(TokenizationState.CommentLessThanSignState)
+                    } else if (consumedCharacter.matches('-')) {
+                        switchTo(TokenizationState.CommentEndDashState)
+                    } else {
+                        (currentToken as CommentToken).data += consumedCharacter.character
                     }
                 }
                 TokenizationState.CommentLessThanSignState -> {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    if (consumedCharacter == '!') {
-                        (currentToken as CommentToken).data += consumedCharacter
+                    if (consumedCharacter.matches('!')) {
+                        (currentToken as CommentToken).data += consumedCharacter.character
                         switchTo(TokenizationState.CommentLessThanSignBangState)
-                    } else if (consumedCharacter == '<') {
-                        (currentToken as CommentToken).data += consumedCharacter
+                    } else if (consumedCharacter.matches('<')) {
+                        (currentToken as CommentToken).data += consumedCharacter.character
                     } else {
                         reconsumeIn(TokenizationState.CommentState)
                     }
@@ -355,7 +345,7 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '-') {
+                    if (consumedCharacter.matches('-')) {
                         switchTo(TokenizationState.CommentLessThanSignBangDashState)
                     } else {
                         reconsumeIn(TokenizationState.CommentState)
@@ -365,7 +355,7 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '-') {
+                    if (consumedCharacter.matches('-')) {
                         switchTo(TokenizationState.CommentLessThanSignBangDashDashState)
                     } else {
                         reconsumeIn(TokenizationState.CommentEndDashState)
@@ -375,7 +365,7 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '>') {
+                    if (consumedCharacter.matches('>')) {
                         //TODO: or EOF
                         reconsumeIn(TokenizationState.CommentEndState)
                     } else {
@@ -387,7 +377,7 @@ class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '-') {
+                    if (consumedCharacter.matches('-')) {
                         switchTo(TokenizationState.CommentEndState)
                         //TODO: deal with null character
                     } else {
@@ -399,7 +389,7 @@ class Tokenizer(document: String) {
                 TokenizationState.CommentEndState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '>') {
+                    if (consumedCharacter.matches('>')) {
                         emitCurrentToken()
                         switchTo(TokenizationState.DataState)
                     } else {
@@ -412,7 +402,7 @@ class Tokenizer(document: String) {
                 TokenizationState.DOCTYPEState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (isWhitespace(consumedCharacter)) {
+                    if (consumedCharacter.isWhitespace()) {
                         switchTo(TokenizationState.BeforeDOCTYPENameState)
                     } else {
                         unhandledCase(TokenizationState.DOCTYPEState, consumedCharacter)
@@ -421,10 +411,10 @@ class Tokenizer(document: String) {
                 TokenizationState.BeforeDOCTYPENameState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (isAlphabetic(consumedCharacter.code)) {
+                    if (consumedCharacter.isAlpha()) {
                         //FIXME names should be marked as missing (according to spec)
 
-                        val initialName = consumedCharacter.toString()
+                        val initialName = consumedCharacter.character.toString()
                         currentToken = DOCTYPEToken(initialName)
 
                         switchTo(TokenizationState.DOCTYPENameState)
@@ -433,11 +423,11 @@ class Tokenizer(document: String) {
                 TokenizationState.DOCTYPENameState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter == '>') {
+                    if (consumedCharacter.matches('>')) {
                         emitCurrentToken()
                         switchTo(TokenizationState.DataState)
                     } else {
-                        (currentToken as DOCTYPEToken).name += consumedCharacter
+                        (currentToken as DOCTYPEToken).name += consumedCharacter.character
                     }
                 }
                 TokenizationState.AfterDOCTYPENameState -> {
@@ -528,11 +518,11 @@ class Tokenizer(document: String) {
         this.state = state
     }
 
-    private fun hasNextCharacter(): Boolean {
-        return inputStream.available() > 0
+    private fun unhandledCase(state: TokenizationState, unhandledCharacter: InputCharacter = InputCharacter()) {
+        unhandledCase(state, unhandledCharacter.character)
     }
 
-    private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char = ' ') {
+    private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char) {
         // There's probably a more spec-compliant way to deal with unexpected cases.
         // For now though, emit whatever we were working on and insert an EndOfFile to break the endless loop and note where things went wrong
         if (currentToken != null) {
@@ -555,9 +545,18 @@ class Tokenizer(document: String) {
         }
     }
 
-    private fun consumeCharacter(): Char {
-        val consumeCharacter = inputStream.read()
-        return Char(consumeCharacter)
+    private fun hasNextCharacter(): Boolean {
+        return inputStream.available() > 0
+    }
+
+    private fun consumeCharacter(): InputCharacter {
+
+        if (hasNextCharacter()) {
+            val consumedCharacter = inputStream.read()
+            return InputCharacter(character = Char(consumedCharacter))
+        }
+
+        return InputCharacter(type = InputCharacterType.EndOfFile)
     }
 
     private fun nextCharactersAreCaseInsensitiveMatch(needle: String, haystack: InputStream): Boolean {

@@ -274,4 +274,19 @@ class TokenizerTest {
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
+
+    @Test
+    fun should_tokenize_eof_empty_respons() {
+        val simpleExample = ""
+
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = tokenizer.tokenize()
+
+        val expectedTokens = listOf(
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
 }
