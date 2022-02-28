@@ -8,7 +8,7 @@ import org.w3c.dom.Text
 import org.w3c.dom.html.HTMLElement
 import java.lang.Character.isWhitespace
 
-class Parser(private val document: String) {
+class Parser(document: String) {
 
     private val tokenizer = Tokenizer(document)
 
@@ -22,11 +22,13 @@ class Parser(private val document: String) {
     private var headElementPointer: Element? = null
     private val openElements: ArrayDeque<Node> = ArrayDeque()
 
+    private val activeSpeculativeHtmlParser: Parser? = null
+
+    private val confidence: EncodingConfidence = EncodingConfidence.tentative
+
     fun parse(): Document {
         //A Document object has an associated parser cannot change the mode flag (a boolean). It is initially false.
         val root = DocumentImpl()
-
-
 
         do {
             val token = tokenizer.nextToken()
@@ -59,7 +61,7 @@ class Parser(private val document: String) {
                     } else if (token is CharacterToken && isWhitespace(token.data)) {
                         //ignore
                     } else if (token is StartTagToken && token.tagName == "html") {
-                        val element = createElementFromTagName(token.tagName)
+                        val element = createElementFrom(token)
                         root.appendChild(element)
                         openElements.addLast(element)
                         switchTo(InsertionMode.beforeHead)
@@ -121,6 +123,8 @@ class Parser(private val document: String) {
                         insertCharacter(token)
                     } else if (token is CommentToken) {
                         insertComment(token)
+                    } else if (token is DOCTYPEToken) {
+                        //Parse error. Ignore
                     } else if (token is StartTagToken && listOf(
                             "base",
                             "basefont",
@@ -128,11 +132,37 @@ class Parser(private val document: String) {
                             "link"
                         ).contains(token.tagName)
                     ) {
-                        //FIXME
-                        unhandledMode(InsertionMode.inHead, token)
+                        insertHtmlElement(token)
+                        openElements.removeLast()
+
+                        //Acknowledge the token's self-closing flag, if it is set.
                     } else if (token is StartTagToken && token.tagName == "meta") {
-                        //FIXME
-                        unhandledMode(InsertionMode.inHead, token)
+                        val element = insertHtmlElement(token)
+                        openElements.removeLast()
+
+                        //Acknowledge the token's self-closing flag, if it is set.
+
+                        if (activeSpeculativeHtmlParser == null) {
+
+                            if (element.hasAttribute("charset")) {
+                                val encoding = getEncoding(element.getAttribute("charset"))
+                                if (encoding != null && confidence == EncodingConfidence.tentative) {
+                                    changeEncoding(encoding)
+                                }
+
+                            } else if (element.hasAttribute("http-equiv")) {
+                                if (element.getAttribute("http-equiv").equals("Content-Type", ignoreCase = true)) {
+                                    if (element.hasAttribute("content")) {
+                                        val encoding =
+                                            extractCharacterEncodingFromMetaElement(element.getAttribute("content"))
+                                        if (encoding != null && confidence == EncodingConfidence.tentative) {
+                                            changeEncoding(encoding)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                     } else if (token is StartTagToken && token.tagName == "title") {
                         genericRCDATAparsing(token)
                     } else if ((token is StartTagToken && token.tagName == "noscript" && scripting)
@@ -148,7 +178,7 @@ class Parser(private val document: String) {
                     } else if (token is StartTagToken && token.tagName == "script") {
                         val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()
 
-                        val element = createElementFromTagName(token.tagName)
+                        val element = createElementFrom(token)
 
                         //Set the element's parser document to the Document, and unset the element's "non-blocking" flag.
                         // But how??
@@ -415,6 +445,10 @@ class Parser(private val document: String) {
         return root
     }
 
+    private fun changeEncoding(encoding: Encoding) {
+        println("Parser wanted to change encoding to ${encoding.encodingName} , though changing encoding is not implemented")
+    }
+
     private fun reprocessCurrentToken(token: Token) {
         //A bit hacky but puts it back so that it is the next token returned :D
         tokenizer.reprocess(token)
@@ -468,11 +502,19 @@ class Parser(private val document: String) {
     }
 
     private fun insertHtmlElement(token: StartTagToken): Element {
-        val element = createElementFromTagName(token.tagName)
+        val element = createElementFrom(token)
 
         val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()
         adjustedInsertionLocation.appendChild(element)
         openElements.addLast(element)
+        return element
+    }
+
+    private fun createElementFrom(token: StartTagToken): HTMLElement {
+        val element = createElementFromTagName(token.tagName)
+
+        //TODO: handle attribute changes
+        token.attributes.map { element.setAttribute(it.attributeName, it.value) }
         return element
     }
 
@@ -486,6 +528,12 @@ class Parser(private val document: String) {
             }
             "head" -> {
                 return HTMLHeadElementImpl()
+            }
+            "link" -> {
+                return HTMLLinkElementImpl()
+            }
+            "meta" -> {
+                return HTMLMetaElementImpl()
             }
             "p" -> {
                 return HTMLParagraphElementImpl()

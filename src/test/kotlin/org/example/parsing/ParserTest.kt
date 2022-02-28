@@ -98,7 +98,6 @@ class ParserTest {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
-    @Ignore("FIXME: support meta and link tags")
     @Test
     fun should_parse_example_with_meta_tags() {
         val simpleExample = """
@@ -117,9 +116,14 @@ class ParserTest {
         val expectedDOM = """#document
 	html
 		head
+			#text
 			meta
+			#text
 			meta
+			#text
 			link
+			#text
+		#text
 		body
 			#text
 """

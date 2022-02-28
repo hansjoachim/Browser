@@ -8,16 +8,25 @@ import org.w3c.dom.TypeInfo
 open class ElementImpl(
     private val tagName: String
 ) : NodeImpl(nodeName = tagName), Element {
+
+    private var attributes: MutableList<Attr> = mutableListOf()
+
     override fun getTagName(): String {
         return tagName
     }
 
     override fun getAttribute(name: String?): String {
-        TODO("Not yet implemented")
+        val first = attributes
+            .filter { it.name == name }
+            .map { it.value }
+            .firstOrNull()
+
+        return first ?: ""
     }
 
     override fun setAttribute(name: String?, value: String?) {
-        TODO("Not yet implemented")
+        val attribute = AttrImpl(name!!, value!!, this)
+        attributes.add(attribute)
     }
 
     override fun removeAttribute(name: String?) {
@@ -65,7 +74,7 @@ open class ElementImpl(
     }
 
     override fun hasAttribute(name: String?): Boolean {
-        TODO("Not yet implemented")
+        return name in attributes.map { it.name }
     }
 
     override fun hasAttributeNS(namespaceURI: String?, localName: String?): Boolean {
