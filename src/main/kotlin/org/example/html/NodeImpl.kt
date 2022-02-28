@@ -2,8 +2,8 @@ package org.example.html
 
 import org.w3c.dom.*
 
-open class NodeImpl(private val nodeName:String) : Node {
-    private val childNodes : MutableList<Node> = mutableListOf()
+open class NodeImpl(private val nodeName: String) : Node {
+    private val childNodes: MutableList<Node> = mutableListOf()
 
     override fun getNodeName(): String {
         return nodeName

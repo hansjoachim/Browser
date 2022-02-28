@@ -1,8 +1,8 @@
 package org.example.html
 
-import org.w3c.dom.html.HTMLParagraphElement
+import org.w3c.dom.html.HTMLHeadingElement
 
-class HTMLParagraphElementImpl : HTMLParagraphElement, HTMLElementImpl(tagName = "p") {
+class HTMLHeadingElementImpl(tagName: String) : HTMLHeadingElement, HTMLElementImpl(tagName = tagName) {
     override fun getAlign(): String {
         TODO("Not yet implemented")
     }

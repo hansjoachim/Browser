@@ -2,7 +2,7 @@ package org.example.html
 
 import org.w3c.dom.html.HTMLScriptElement
 
-class HTMLScriptElementImpl: HTMLScriptElement, HTMLElementImpl(tagName = "script") {
+class HTMLScriptElementImpl : HTMLScriptElement, HTMLElementImpl(tagName = "script") {
     override fun getText(): String {
         TODO("Not yet implemented")
     }

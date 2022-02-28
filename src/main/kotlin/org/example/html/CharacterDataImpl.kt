@@ -9,7 +9,7 @@ open class CharacterDataImpl(nodeName: String, private var data: String) : Chara
     }
 
     override fun setData(data: String?) {
-        this.data=data!!
+        this.data = data!!
     }
 
     override fun getLength(): Int {

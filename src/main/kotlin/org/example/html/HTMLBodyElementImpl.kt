@@ -2,7 +2,7 @@ package org.example.html
 
 import org.w3c.dom.html.HTMLBodyElement
 
-class HTMLBodyElementImpl:HTMLBodyElement, HTMLElementImpl(tagName = "body")  {
+class HTMLBodyElementImpl : HTMLBodyElement, HTMLElementImpl(tagName = "body") {
     override fun getALink(): String {
         TODO("Not yet implemented")
     }

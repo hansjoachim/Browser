@@ -2,7 +2,7 @@ package org.example.html
 
 import org.w3c.dom.html.HTMLMetaElement
 
-class HTMLMetaElementImpl: HTMLMetaElement, HTMLElementImpl("meta") {
+class HTMLMetaElementImpl : HTMLMetaElement, HTMLElementImpl("meta") {
     override fun getContent(): String {
         TODO("Not yet implemented")
     }

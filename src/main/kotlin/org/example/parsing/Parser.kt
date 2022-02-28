@@ -520,14 +520,32 @@ class Parser(document: String) {
 
     private fun createElementFromTagName(tagName: String): HTMLElement {
         when (tagName) {
+            "a" -> {
+                return HTMLAnchorElementImpl()
+            }
             "body" -> {
                 return HTMLBodyElementImpl()
             }
             "div" -> {
                 return HtmlDivElementImpl()
             }
+            "form" -> {
+                return HTMLFormElementImpl()
+            }
+            "h1", "h2", "h3", "h4", "h5", "h6" -> {
+                return HTMLHeadingElementImpl(tagName)
+            }
             "head" -> {
                 return HTMLHeadElementImpl()
+            }
+            "img" -> {
+                return HTMLImageElementImpl()
+            }
+            "input" -> {
+                return HTMLInputElementImpl()
+            }
+            "li" -> {
+                return HTMLLIElementImpl()
             }
             "link" -> {
                 return HTMLLinkElementImpl()
@@ -535,14 +553,29 @@ class Parser(document: String) {
             "meta" -> {
                 return HTMLMetaElementImpl()
             }
+            "ol" -> {
+                return HTMLOListElementImpl()
+            }
             "p" -> {
                 return HTMLParagraphElementImpl()
             }
             "script" -> {
                 return HTMLScriptElementImpl()
             }
+            "table" -> {
+                return HTMLTableElementImpl()
+            }
+            "td", "th" -> {
+                return HTMLTableCellElementImpl(tagName)
+            }
+            "tr" -> {
+                return HTMLTableRowElementImpl()
+            }
             "title" -> {
                 return HTMLTitleElementImpl()
+            }
+            "ul" -> {
+                return HTMLUListElementImpl()
             }
             else -> {
                 println("Didn't find more specific implementation for $tagName")
