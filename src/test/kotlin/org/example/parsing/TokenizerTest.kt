@@ -10,7 +10,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html><body></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -29,7 +29,7 @@ class TokenizerTest {
         val simpleExample = "<!doctype html><html><body></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -48,7 +48,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html><body><p>hello</p></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -74,7 +74,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html><body><!-- Ignored comment --></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -94,7 +94,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html><body><!-- Comment with - in the middle --></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -114,7 +114,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html lang=en></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -131,7 +131,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html lang='en'></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -148,7 +148,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html lang=\"en\"></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -165,7 +165,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html><body id=\"test\" class='some class' lang=en-US></body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -191,7 +191,7 @@ class TokenizerTest {
 
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -215,7 +215,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html><h1>My title</h1></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -242,7 +242,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html><br/></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -260,7 +260,7 @@ class TokenizerTest {
         val simpleExample = "<!DOCTYPE html><html><br /></html>"
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             DOCTYPEToken("html"),
@@ -279,12 +279,27 @@ class TokenizerTest {
 
         val tokenizer = Tokenizer(simpleExample)
 
-        val tokens = tokenizer.allTokens()
+        val tokens = allTokens(tokenizer)
 
         val expectedTokens = listOf(
             EndOfFileToken()
         )
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+
+    /**
+     * Only works when testing simple cases.
+     * This methode will NOT handle all cases which depend on the parser adjusting tokenization state!
+     */
+    private fun allTokens(tokenizer: Tokenizer): List<Token> {
+        val allTokens: MutableList<Token> = mutableListOf()
+
+        while (EndOfFileToken() !in allTokens) {
+            allTokens.add(tokenizer.nextToken())
+        }
+
+        return allTokens
     }
 }

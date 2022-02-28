@@ -18,9 +18,6 @@ val network = NetworkFetcher()
 private fun goTo(address: String) {
     val result = network.getRequest(address)
     println(result)
-    val tokens = Tokenizer(result).allTokens()
-
-    println("tokenized to $tokens")
 
     val document = Parser(result).parse()
     DOMDebugger.printDOMTree(document)

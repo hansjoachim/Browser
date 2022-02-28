@@ -160,8 +160,6 @@ class ParserTest {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
-    //TODO : this case is in parser instead of tokenizer since the parser is the one giving the signal to the tokenizer
-    @Ignore("FIXME: right now script content can break in strange ways if it stumble across < symbols. Should parse this as pure text to fix those errors ")
     @Test
     fun should_parse_script() {
         val simpleExample = """
@@ -174,6 +172,7 @@ function comparison(a, b)  {
 }
 </script>
 </head>
+<body>
 </body>
 </html>
 """
@@ -182,13 +181,17 @@ function comparison(a, b)  {
         val expectedDOM = """#document
 	html
 		head
+			#text
 			script
+				#text
+			#text
+		#text
 		body
+			#text
 """
         val tree = DOMDebugger.getDOMTree(document)
         assertThat(tree).isEqualTo(expectedDOM)
     }
-
 
     //TODO: expected this would break with the simple popping of current element. Let's revisit this in a while
     @Test
@@ -259,4 +262,11 @@ function comparison(a, b)  {
         val tree = DOMDebugger.getDOMTree(document)
         assertThat(tree).isEqualTo(expectedDOM)
     }
+
+//TODO: script tags in body
+//TODO: support end body
+//TODO: optional doctype?
+//TODO: add more specific elements based on warnings
+//TODO: emit more than one thing to a list/stream?
+
 }

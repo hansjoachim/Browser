@@ -4,27 +4,13 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import kotlin.text.Charsets.UTF_8
 
-class Tokenizer(document: String) {
+internal class Tokenizer(document: String) {
     //TODO: stringstream instead of bytes to skip conversion back and forth?
     private val inputStream: InputStream = ByteArrayInputStream(document.toByteArray(UTF_8))
     private var currentToken: Token? = null
-    internal var emittedToken: Token? = null
+    private var emittedToken: Token? = null
 
     private var state = TokenizationState.DataState
-
-    /**
-     * For test purposes. Other consumers should use nextToken
-     * This methode will NOT handle all cases which depend on the parser adjusting tokenization state!
-     */
-    internal fun allTokens(): List<Token> {
-        val allTokens: MutableList<Token> = mutableListOf()
-
-        while (EndOfFileToken() !in allTokens) {
-            allTokens.add(nextToken())
-        }
-
-        return allTokens
-    }
 
     fun nextToken(): Token {
         val emitted = tokenize()
@@ -56,7 +42,17 @@ class Tokenizer(document: String) {
                     unhandledCase(TokenizationState.RAWTEXTState, ' ')
                 }
                 TokenizationState.ScriptDataState -> {
-                    unhandledCase(TokenizationState.ScriptDataState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('<')) {
+                        switchTo(TokenizationState.ScriptDataLessThanSignState)
+                        //TODO: or null
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        emitEndOfFileToken()
+                    } else {
+                        currentToken = CharacterToken(consumedCharacter)
+                        emitCurrentToken()
+                    }
                 }
                 TokenizationState.PLAINTEXTState -> {
                     unhandledCase(TokenizationState.PLAINTEXTState, ' ')
@@ -121,28 +117,138 @@ class Tokenizer(document: String) {
                     unhandledCase(TokenizationState.RAWTEXTEndTagNameState, ' ')
                 }
                 TokenizationState.ScriptDataLessThanSignState -> {
-                    unhandledCase(TokenizationState.ScriptDataLessThanSignState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('/')) {
+                        //FIXME: deal with temporary buffer
+                        switchTo(TokenizationState.ScriptDataEndTagOpenState)
+                    } else if (consumedCharacter.matches('!')) {
+                        switchTo(TokenizationState.ScriptDataEscapeStartState)
+                        //FIXME: can I even emit more than one thing at a time with the current setup?
+                        currentToken = CharacterToken('<')
+                        emitCurrentToken()
+                        currentToken = CharacterToken('!')
+                        emitCurrentToken()
+                    } else {
+                        currentToken = CharacterToken('<')
+                        emitCurrentToken()
+                        reconsumeIn(TokenizationState.ScriptDataState)
+                    }
                 }
                 TokenizationState.ScriptDataEndTagOpenState -> {
-                    unhandledCase(TokenizationState.ScriptDataEndTagOpenState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.isAlpha()) {
+                        currentToken = EndTagToken()
+                        reconsumeIn(TokenizationState.ScriptDataEndTagNameState)
+                    } else {
+                        //FIXME: can I even emit more than one thing at a time with the current setup?
+                        currentToken = CharacterToken('<')
+                        emitCurrentToken()
+                        currentToken = CharacterToken('/')
+                        emitCurrentToken()
+                        reconsumeIn(TokenizationState.ScriptDataState)
+                    }
                 }
                 TokenizationState.ScriptDataEndTagNameState -> {
-                    unhandledCase(TokenizationState.ScriptDataEndTagNameState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    //TODO: multiple other cases
+                    if (consumedCharacter.matches('>')) {
+                        //FIXME: If the current end tag token is an appropriate end tag token,
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isAlpha()) {
+                        (currentToken as EndTagToken).tagName += consumedCharacter.character
+                        //FIXME: Also append to the temporary buffer
+                    } else {
+                        unhandledCase(TokenizationState.ScriptDataEndTagNameState, ' ')
+                    }
                 }
                 TokenizationState.ScriptDataEscapeStartState -> {
-                    unhandledCase(TokenizationState.ScriptDataEscapeStartState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('-')) {
+                        switchTo(TokenizationState.ScriptDataEscapeStartDashState)
+                        currentToken = CharacterToken('-')
+                        emitCurrentToken()
+                    } else {
+                        reconsumeIn(TokenizationState.ScriptDataState)
+                    }
                 }
                 TokenizationState.ScriptDataEscapeStartDashState -> {
-                    unhandledCase(TokenizationState.ScriptDataEscapeStartDashState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('-')) {
+                        switchTo(TokenizationState.ScriptDataEscapedDashDashState)
+                        currentToken = CharacterToken('-')
+                        emitCurrentToken()
+                    } else {
+                        reconsumeIn(TokenizationState.ScriptDataState)
+                    }
                 }
                 TokenizationState.ScriptDataEscapedState -> {
-                    unhandledCase(TokenizationState.ScriptDataEscapedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('-')) {
+                        switchTo(TokenizationState.ScriptDataEscapedDashState)
+                        currentToken = CharacterToken('-')
+                        emitCurrentToken()
+                    } else if (consumedCharacter.matches('<')) {
+                        switchTo(TokenizationState.ScriptDataEscapedLessThanSignState)
+                        //TODO: if null
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        emitEndOfFileToken()
+                    } else {
+                        currentToken = CharacterToken(consumedCharacter)
+                        emitCurrentToken()
+                    }
                 }
                 TokenizationState.ScriptDataEscapedDashState -> {
-                    unhandledCase(TokenizationState.ScriptDataEscapedDashState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('-')) {
+                        switchTo(TokenizationState.ScriptDataEscapedDashDashState)
+                        currentToken = CharacterToken('-')
+                        emitCurrentToken()
+                    } else if (consumedCharacter.matches('<')) {
+                        switchTo(TokenizationState.ScriptDataEscapedLessThanSignState)
+                        //TODO: if null
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        emitEndOfFileToken()
+                    } else {
+                        switchTo(TokenizationState.ScriptDataEscapedState)
+                        currentToken = CharacterToken(consumedCharacter)
+                        emitCurrentToken()
+                    }
                 }
                 TokenizationState.ScriptDataEscapedDashDashState -> {
-                    unhandledCase(TokenizationState.ScriptDataEscapedDashDashState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('-')) {
+                        currentToken = CharacterToken('-')
+                        emitCurrentToken()
+                    } else if (consumedCharacter.matches('<')) {
+                        switchTo(TokenizationState.ScriptDataEscapedLessThanSignState)
+                    } else if (consumedCharacter.matches('>')) {
+                        switchTo(TokenizationState.ScriptDataState)
+                        currentToken = CharacterToken('>')
+                        emitCurrentToken()
+                        //TODO: if null
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        emitEndOfFileToken()
+                    } else {
+                        switchTo(TokenizationState.ScriptDataEscapedState)
+                        currentToken = CharacterToken(consumedCharacter)
+                        emitCurrentToken()
+                    }
                 }
                 TokenizationState.ScriptDataEscapedLessThanSignState -> {
                     unhandledCase(TokenizationState.ScriptDataEscapedLessThanSignState, ' ')
@@ -533,7 +639,7 @@ class Tokenizer(document: String) {
         switchTo(newState)
     }
 
-    private fun switchTo(state: TokenizationState) {
+    internal fun switchTo(state: TokenizationState) {
         this.state = state
     }
 
@@ -581,6 +687,7 @@ class Tokenizer(document: String) {
         return InputCharacter(type = InputCharacterType.EndOfFile)
     }
 
+    //TODO: tests
     private fun nextCharactersAreCaseInsensitiveMatch(needle: String, haystack: InputStream): Boolean {
         haystack.mark(needle.length)
 
@@ -591,11 +698,14 @@ class Tokenizer(document: String) {
             val peek = Char(haystack.read())
             if (!peek.toString().equals(c.toString(), ignoreCase = true)) {
                 haystack.reset()
-                println("false!")
                 return false
             }
         }
         haystack.reset()
         return true
+    }
+
+    internal fun reprocess(token: Token) {
+        emittedToken = token
     }
 }

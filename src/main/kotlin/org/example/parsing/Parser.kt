@@ -16,7 +16,7 @@ class Parser(private val document: String) {
     private var framsetOk: Boolean = true
     private val fosterParenting = false
 
-    private var currentMode: InsertionMode = InsertionMode.initial
+    private var currentInsertionMode: InsertionMode = InsertionMode.initial
     private var originalInsertionMode: InsertionMode? = null
 
     private var headElementPointer: Element? = null
@@ -30,7 +30,7 @@ class Parser(private val document: String) {
 
         do {
             val token = tokenizer.nextToken()
-            when (currentMode) {
+            when (currentInsertionMode) {
                 InsertionMode.initial -> {
                     if (token is CharacterToken && isWhitespace(token.data)) {
                         //ignore
@@ -116,9 +116,6 @@ class Parser(private val document: String) {
                 }
                 InsertionMode.inHead -> {
                     //TODO : lots of if cases
-                    //FIXME: if we stumble across a start tag of type <script>, we should change the state of the tokenizer
-                    //In other words, we need to wrap the tokenizer inside the parser, process each token as they appear
-                    //and be able to manipulate the tokenizer during parsing. Hm...
 
                     if (token is CharacterToken && isWhitespace((token.data))) {
                         insertCharacter(token)
@@ -149,8 +146,21 @@ class Parser(private val document: String) {
                         insertHtmlElement(token)
                         switchTo(InsertionMode.inHeadNoscript)
                     } else if (token is StartTagToken && token.tagName == "script") {
-                        //FIXME
-                        unhandledMode(InsertionMode.inHead, token)
+                        val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()
+
+                        val element = createElementFromTagName(token.tagName)
+
+                        //Set the element's parser document to the Document, and unset the element's "non-blocking" flag.
+                        // But how??
+
+                        //TODO: handle other script cases
+
+                        adjustedInsertionLocation.appendChild(element)
+                        openElements.addLast(element)
+
+                        tokenizer.switchTo(TokenizationState.ScriptDataState)
+                        originalInsertionMode = currentInsertionMode
+                        switchTo(InsertionMode.text)
                     } else if (token is EndTagToken && token.tagName == "head") {
                         openElements.removeLast()
                         switchTo(InsertionMode.afterHead)
@@ -407,7 +417,7 @@ class Parser(private val document: String) {
 
     private fun reprocessCurrentToken(token: Token) {
         //A bit hacky but puts it back so that it is the next token returned :D
-        tokenizer.emittedToken = token
+        tokenizer.reprocess(token)
     }
 
     private fun insertComment(token: CommentToken) {
@@ -453,7 +463,7 @@ class Parser(private val document: String) {
     private fun genericRCDATAparsing(token: StartTagToken) {
         insertHtmlElement(token)
         //FIXME: switch tokenizer mode
-        originalInsertionMode = currentMode
+        originalInsertionMode = currentInsertionMode
         switchTo(InsertionMode.text)
     }
 
@@ -468,20 +478,23 @@ class Parser(private val document: String) {
 
     private fun createElementFromTagName(tagName: String): HTMLElement {
         when (tagName) {
-            "head" -> {
-                return HTMLHeadElementImpl()
-            }
-            "title" -> {
-                return HTMLTitleElementImpl()
-            }
             "body" -> {
                 return HTMLBodyElementImpl()
             }
             "div" -> {
                 return HtmlDivElementImpl()
             }
+            "head" -> {
+                return HTMLHeadElementImpl()
+            }
             "p" -> {
                 return HTMLParagraphElementImpl()
+            }
+            "script" -> {
+                return HTMLScriptElementImpl()
+            }
+            "title" -> {
+                return HTMLTitleElementImpl()
             }
             else -> {
                 println("Didn't find more specific implementation for $tagName")
@@ -506,7 +519,7 @@ class Parser(private val document: String) {
     }
 
     private fun switchTo(mode: InsertionMode) {
-        this.currentMode = mode
+        this.currentInsertionMode = mode
     }
 
     private fun unhandledMode(mode: InsertionMode, token: Token) {
