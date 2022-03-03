@@ -1,7 +1,6 @@
 package org.example.parsing
 
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.Ignore
 import org.junit.Test
 
 class ParserTest {
@@ -16,6 +15,20 @@ class ParserTest {
 		head
 		body
 			div
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    @Test
+    fun should_parse_with_missing_doctype() {
+        val simpleExample = "<html><body /></html>"
+        val document = Parser(simpleExample).parse()
+
+        val expectedDOM = """#document
+	html
+		head
+		body
 """
         val tree = DOMDebugger.getDOMTree(document)
         assertThat(tree).isEqualTo(expectedDOM)
@@ -165,6 +178,28 @@ class ParserTest {
     }
 
     @Test
+    fun should_parse_with_style() {
+        val simpleExample =
+            "<html><head><style>abc</style><noscript><style>xyz</style></noscript></head><body><style>123</style></body></html>"
+        val document = Parser(simpleExample).parse()
+
+        val expectedDOM = """#document
+	html
+		head
+			style
+				#text
+			noscript
+				style
+					#text
+		body
+			style
+				#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    @Test
     fun should_parse_script() {
         val simpleExample = """
 <!DOCTYPE html>
@@ -268,9 +303,5 @@ function comparison(a, b)  {
     }
 
 //TODO: script tags in body
-//TODO: support end body
-//TODO: optional doctype?
-//TODO: add more specific elements based on warnings
 //TODO: emit more than one thing to a list/stream?
-
 }

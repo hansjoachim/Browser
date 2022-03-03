@@ -49,7 +49,13 @@ class Parser(document: String) {
 
                         switchTo(InsertionMode.beforeHtml)
                     } else {
-                        unhandledMode(InsertionMode.initial, token)
+                        //TODO:
+                        //if the document is NOT an iframe srcdoc, then parse error
+                        //if parser cannot change the mode flag is false, then set Document to quirks mode
+                        // That's all fine and nice, but where do I find these flags?
+
+                        switchTo(InsertionMode.beforeHtml)
+                        reprocessCurrentToken(token)
                     }
                 }
                 InsertionMode.beforeHtml -> {
@@ -204,15 +210,55 @@ class Parser(document: String) {
                     }
                 }
                 InsertionMode.inHeadNoscript -> {
-                    if (token is EndTagToken && token.tagName == "noscript") {
+                    if (token is DOCTYPEToken) {
+                        //Parse error. Ignore
+                    } else if (token is StartTagToken && token.tagName == "html") {
+                        //TODO process the token like in body
+                        unhandledMode(InsertionMode.inHeadNoscript, token)
+                    } else if (token is EndTagToken && token.tagName == "noscript") {
                         openElements.removeLast()
                         //TODO: update current node to head
                         switchTo(InsertionMode.inHead)
+                    } else if (token is CharacterToken && isWhitespace(token.data)) {
+                        //Like in head
+                        insertCharacter(token)
                     } else if (token is CommentToken) {
                         //Like in head
                         insertComment(token)
+                    } else if (token is StartTagToken && listOf(
+                            "basefont",
+                            "bgsound",
+                            "link",
+                            "meta",
+                            "noframes",
+                            "style"
+                        ).contains(token.tagName)
+                    ) {
+                        //FIXME: like in head . NOTE: these tags are treated by separate cases in head!!
+
+                        if (listOf("noframes", "style").contains(token.tagName)) {
+                            // Like in head
+                            genericRawTextElementParsing(token)
+                        } else {
+                            unhandledMode(InsertionMode.inHeadNoscript, token)
+                        }
+                    } else if (token is EndTagToken && token.tagName == "br") {
+                        // Same as any case below
+                        //Parse error
+                        openElements.removeLast()
+                        switchTo(InsertionMode.inHead)
+                        reprocessCurrentToken(token)
+                    } else if ((token is StartTagToken && listOf(
+                            "head",
+                            "noscript"
+                        ).contains(token.tagName)) || token is EndTagToken
+                    ) {
+                        //Parse error. Ignore
                     } else {
-                        unhandledMode(InsertionMode.inHeadNoscript, token)
+                        //Parse error
+                        openElements.removeLast()
+                        switchTo(InsertionMode.inHead)
+                        reprocessCurrentToken(token)
                     }
                 }
                 InsertionMode.afterHead -> {
@@ -491,12 +537,15 @@ class Parser(document: String) {
     }
 
     private fun genericRawTextElementParsing(token: StartTagToken) {
-        genericRCDATAparsing(token)
+        genericRCDATAparsing(token, TokenizationState.RAWTEXTState)
     }
 
-    private fun genericRCDATAparsing(token: StartTagToken) {
+    private fun genericRCDATAparsing(
+        token: StartTagToken,
+        switchToState: TokenizationState = TokenizationState.RCDATAState
+    ) {
         insertHtmlElement(token)
-        //FIXME: switch tokenizer mode
+        tokenizer.switchTo(switchToState)
         originalInsertionMode = currentInsertionMode
         switchTo(InsertionMode.text)
     }

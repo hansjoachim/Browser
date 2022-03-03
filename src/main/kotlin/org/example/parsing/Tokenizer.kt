@@ -36,10 +36,32 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.RCDATAState -> {
-                    unhandledCase(TokenizationState.RCDATAState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    if (consumedCharacter.matches('&')) {
+                        unhandledCase(TokenizationState.RCDATAState, consumedCharacter)
+                    } else if (consumedCharacter.matches('<')) {
+                        switchTo(TokenizationState.RCDATALessThanSignState)
+                    }
+                    //TODO: if null
+                    else if (consumedCharacter.isEndOfFile()) {
+                        emitEndOfFileToken()
+                    } else {
+                        currentToken = CharacterToken(consumedCharacter)
+                        emitCurrentToken()
+                    }
                 }
                 TokenizationState.RAWTEXTState -> {
-                    unhandledCase(TokenizationState.RAWTEXTState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('<')) {
+                        switchTo(TokenizationState.RAWTEXTLessThanSignState)
+                        //TODO: null character
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        emitEndOfFileToken()
+                    } else {
+                        currentToken = CharacterToken(consumedCharacter)
+                        emitCurrentToken()
+                    }
                 }
                 TokenizationState.ScriptDataState -> {
                     val consumedCharacter = consumeCharacter()
@@ -55,7 +77,8 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.PLAINTEXTState -> {
-                    unhandledCase(TokenizationState.PLAINTEXTState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.PLAINTEXTState, consumedCharacter)
                 }
                 TokenizationState.TagOpenState -> {
                     inputStream.mark(1)
@@ -99,22 +122,105 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.RCDATALessThanSignState -> {
-                    unhandledCase(TokenizationState.RCDATALessThanSignState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+                    if (consumedCharacter.matches('/')) {
+                        //TODO set the temporary buffer to the empty string
+                        switchTo(TokenizationState.RCDATAEndTagOpenState)
+                    } else {
+                        currentToken = CharacterToken('<')
+                        emitCurrentToken()
+                        reconsumeIn(TokenizationState.RCDATAState)
+                    }
                 }
                 TokenizationState.RCDATAEndTagOpenState -> {
-                    unhandledCase(TokenizationState.RCDATAEndTagOpenState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+                    if (consumedCharacter.isAlpha()) {
+                        currentToken = EndTagToken()
+                        reconsumeIn(TokenizationState.RCDATAEndTagNameState)
+                    } else {
+                        //TODO Can I even emit more than one thing with the current setup?
+                        currentToken = CharacterToken('<')
+                        emitCurrentToken()
+                        currentToken = CharacterToken('/')
+                        emitCurrentToken()
+                        reconsumeIn(TokenizationState.RCDATAState)
+                    }
                 }
                 TokenizationState.RCDATAEndTagNameState -> {
-                    unhandledCase(TokenizationState.RCDATAEndTagNameState, ' ')
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.isWhitespace()) {
+                        //TODO: If the current end tag token is an appropriate end tag token,
+                        switchTo(TokenizationState.BeforeAttributeNameState)
+                    } else if (consumedCharacter.matches('/')) {
+                        //TODO: If the current end tag token is an appropriate end tag token,
+                        switchTo(TokenizationState.SelfClosingStartTagState)
+                    } else if (consumedCharacter.matches('>')) {
+                        //TODO: If the current end tag token is an appropriate end tag token,
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                        //FIXME: uppercase/lowercase
+                    } else if (consumedCharacter.isAlpha()) {
+                        (currentToken as TagToken).tagName += consumedCharacter.character
+                        //TODO also append to the temporary buffer
+                    } else {
+
+                        //uses the temporary buffer
+                        unhandledCase(TokenizationState.RCDATAEndTagNameState, consumedCharacter)
+                    }
                 }
                 TokenizationState.RAWTEXTLessThanSignState -> {
-                    unhandledCase(TokenizationState.RAWTEXTLessThanSignState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.matches('/')) {
+                        //TODO Set the temporary buffer to the empty string.
+                        switchTo(TokenizationState.RAWTEXTEndTagOpenState)
+                    } else {
+                        currentToken = CharacterToken('<')
+                        emitCurrentToken()
+
+                        reconsumeIn(TokenizationState.RAWTEXTState)
+                    }
                 }
                 TokenizationState.RAWTEXTEndTagOpenState -> {
-                    unhandledCase(TokenizationState.RAWTEXTEndTagOpenState, ' ')
+                    inputStream.mark(1)
+                    val consumedCharacter = consumeCharacter()
+
+                    if (consumedCharacter.isAlpha()) {
+                        currentToken = EndTagToken()
+                        reconsumeIn(TokenizationState.RAWTEXTEndTagNameState)
+                    } else {
+                        //FIXME: can I even emit more than one thing with the current setup?
+                        currentToken = CharacterToken('<')
+                        emitCurrentToken()
+                        currentToken = CharacterToken('/')
+                        emitCurrentToken()
+
+                        reconsumeIn(TokenizationState.RAWTEXTState)
+                    }
                 }
                 TokenizationState.RAWTEXTEndTagNameState -> {
-                    unhandledCase(TokenizationState.RAWTEXTEndTagNameState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    if (consumedCharacter.isWhitespace()) {
+                        //TODO If the current end tag token is an appropriate end tag token,
+                        switchTo(TokenizationState.BeforeAttributeNameState)
+                    } else if (consumedCharacter.matches('/')) {
+                        //TODO If the current end tag token is an appropriate end tag token,
+                        switchTo(TokenizationState.SelfClosingStartTagState)
+                    } else if (consumedCharacter.matches('>')) {
+                        //TODO If the current end tag token is an appropriate end tag token,
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                        //FIXME: uppercase/lowercase
+                    } else if (consumedCharacter.isAlpha()) {
+                        (currentToken as TagToken).tagName += consumedCharacter
+                        //TODO also append to the temporary buffer
+                    } else {
+                        unhandledCase(TokenizationState.RAWTEXTEndTagNameState, consumedCharacter)
+                    }
                 }
                 TokenizationState.ScriptDataLessThanSignState -> {
                     inputStream.mark(1)
@@ -164,7 +270,7 @@ internal class Tokenizer(document: String) {
                         (currentToken as EndTagToken).tagName += consumedCharacter.character
                         //FIXME: Also append to the temporary buffer
                     } else {
-                        unhandledCase(TokenizationState.ScriptDataEndTagNameState, ' ')
+                        unhandledCase(TokenizationState.ScriptDataEndTagNameState, consumedCharacter)
                     }
                 }
                 TokenizationState.ScriptDataEscapeStartState -> {
@@ -251,31 +357,40 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.ScriptDataEscapedLessThanSignState -> {
-                    unhandledCase(TokenizationState.ScriptDataEscapedLessThanSignState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataEscapedLessThanSignState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataEscapedEndTagOpenState -> {
-                    unhandledCase(TokenizationState.ScriptDataEscapedEndTagOpenState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataEscapedEndTagOpenState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataEscapedEndTagNameState -> {
-                    unhandledCase(TokenizationState.ScriptDataEscapedEndTagNameState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataEscapedEndTagNameState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataDoubleEscapeStartState -> {
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapeStartState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapeStartState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataDoubleEscapedState -> {
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataDoubleEscapedDashState -> {
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedDashState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedDashState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataDoubleEscapedDashDashState -> {
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedDashDashState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedDashDashState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataDoubleEscapedLessThanSignState -> {
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedLessThanSignState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedLessThanSignState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataDoubleEscapeEndState -> {
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapeEndState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.ScriptDataDoubleEscapeEndState, consumedCharacter)
                 }
                 TokenizationState.BeforeAttributeNameState -> {
                     inputStream.mark(1)
@@ -409,7 +524,8 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.BogusCommentState -> {
-                    unhandledCase(TokenizationState.BogusCommentState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.BogusCommentState, consumedCharacter)
                 }
                 TokenizationState.MarkupDeclarationOpenState -> {
                     if (nextCharactersAreCaseInsensitiveMatch("--", inputStream)) {
@@ -438,7 +554,8 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.CommentStartDashState -> {
-                    unhandledCase(TokenizationState.CommentStartDashState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.CommentStartDashState, consumedCharacter)
                 }
                 TokenizationState.CommentState -> {
                     val consumedCharacter = consumeCharacter()
@@ -520,7 +637,8 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.CommentEndBangState -> {
-                    unhandledCase(TokenizationState.CommentEndBangState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.CommentEndBangState, consumedCharacter)
                 }
                 TokenizationState.DOCTYPEState -> {
                     val consumedCharacter = consumeCharacter()
@@ -554,79 +672,104 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.AfterDOCTYPENameState -> {
-                    unhandledCase(TokenizationState.AfterDOCTYPENameState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.AfterDOCTYPENameState, consumedCharacter)
                 }
                 TokenizationState.AfterDOCTYPEPublicKeywordState -> {
-                    unhandledCase(TokenizationState.AfterDOCTYPEPublicKeywordState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.AfterDOCTYPEPublicKeywordState, consumedCharacter)
                 }
                 TokenizationState.BeforeDOCTYPEPublicIdentifierState -> {
-                    unhandledCase(TokenizationState.BeforeDOCTYPEPublicIdentifierState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.BeforeDOCTYPEPublicIdentifierState, consumedCharacter)
                 }
                 TokenizationState.DOCTYPEPublicIdentifierDoubleQuotedState -> {
-                    unhandledCase(TokenizationState.DOCTYPEPublicIdentifierDoubleQuotedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.DOCTYPEPublicIdentifierDoubleQuotedState, consumedCharacter)
                 }
                 TokenizationState.DOCTYPEPublicIdentifierSingleQuotedState -> {
-                    unhandledCase(TokenizationState.DOCTYPEPublicIdentifierSingleQuotedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.DOCTYPEPublicIdentifierSingleQuotedState, consumedCharacter)
                 }
                 TokenizationState.AfterDOCTYPEPublicIdentifierState -> {
-                    unhandledCase(TokenizationState.AfterDOCTYPEPublicIdentifierState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.AfterDOCTYPEPublicIdentifierState, consumedCharacter)
                 }
                 TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState -> {
-                    unhandledCase(TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState, consumedCharacter)
                 }
                 TokenizationState.AfterDOCTYPESystemKeywordState -> {
-                    unhandledCase(TokenizationState.AfterDOCTYPESystemKeywordState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.AfterDOCTYPESystemKeywordState, consumedCharacter)
                 }
                 TokenizationState.BeforeDOCTYPESystemIdentifierState -> {
-                    unhandledCase(TokenizationState.BeforeDOCTYPESystemIdentifierState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.BeforeDOCTYPESystemIdentifierState, consumedCharacter)
                 }
                 TokenizationState.DOCTYPESystemIdentifierDoubleQuotedState -> {
-                    unhandledCase(TokenizationState.DOCTYPESystemIdentifierDoubleQuotedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.DOCTYPESystemIdentifierDoubleQuotedState, consumedCharacter)
                 }
                 TokenizationState.DOCTYPESystemIdentifierSingleQuotedState -> {
-                    unhandledCase(TokenizationState.DOCTYPESystemIdentifierSingleQuotedState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.DOCTYPESystemIdentifierSingleQuotedState, consumedCharacter)
                 }
                 TokenizationState.AfterDOCTYPESystemIdentifierState -> {
-                    unhandledCase(TokenizationState.AfterDOCTYPESystemIdentifierState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.AfterDOCTYPESystemIdentifierState, consumedCharacter)
                 }
                 TokenizationState.BogusDOCTYPEState -> {
-                    unhandledCase(TokenizationState.BogusDOCTYPEState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.BogusDOCTYPEState, consumedCharacter)
                 }
                 TokenizationState.CDATASectionState -> {
-                    unhandledCase(TokenizationState.CDATASectionState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.CDATASectionState, consumedCharacter)
                 }
                 TokenizationState.CDATASectionBracketState -> {
-                    unhandledCase(TokenizationState.CDATASectionBracketState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.CDATASectionBracketState, consumedCharacter)
                 }
                 TokenizationState.CDATASectionEndState -> {
-                    unhandledCase(TokenizationState.CDATASectionEndState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.CDATASectionEndState, consumedCharacter)
                 }
                 TokenizationState.CharacterReferenceState -> {
-                    unhandledCase(TokenizationState.CharacterReferenceState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.CharacterReferenceState, consumedCharacter)
                 }
                 TokenizationState.NamedCharacterReferenceState -> {
-                    unhandledCase(TokenizationState.NamedCharacterReferenceState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.NamedCharacterReferenceState, consumedCharacter)
                 }
                 TokenizationState.AmbiguousAmpersandState -> {
-                    unhandledCase(TokenizationState.AmbiguousAmpersandState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.AmbiguousAmpersandState, consumedCharacter)
                 }
                 TokenizationState.NumericCharacterReferenceState -> {
-                    unhandledCase(TokenizationState.NumericCharacterReferenceState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.NumericCharacterReferenceState, consumedCharacter)
                 }
                 TokenizationState.HexadecimalCharacterReferenceStartState -> {
-                    unhandledCase(TokenizationState.HexadecimalCharacterReferenceStartState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.HexadecimalCharacterReferenceStartState, consumedCharacter)
                 }
                 TokenizationState.DecimalCharacterReferenceStartState -> {
-                    unhandledCase(TokenizationState.DecimalCharacterReferenceStartState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.DecimalCharacterReferenceStartState, consumedCharacter)
                 }
                 TokenizationState.HexadecimalCharacterReferenceState -> {
-                    unhandledCase(TokenizationState.HexadecimalCharacterReferenceState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.HexadecimalCharacterReferenceState, consumedCharacter)
                 }
                 TokenizationState.DecimalCharacterReferenceState -> {
-                    unhandledCase(TokenizationState.DecimalCharacterReferenceState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.DecimalCharacterReferenceState, consumedCharacter)
                 }
                 TokenizationState.NumericCharacterReferenceEndState -> {
-                    unhandledCase(TokenizationState.NumericCharacterReferenceEndState, ' ')
+                    val consumedCharacter = consumeCharacter()
+                    unhandledCase(TokenizationState.NumericCharacterReferenceEndState, consumedCharacter)
                 }
             }
         }
