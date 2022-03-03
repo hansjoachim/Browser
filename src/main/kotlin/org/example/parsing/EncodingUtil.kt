@@ -30,5 +30,40 @@ fun getEncoding(label: String): Encoding? {
 }
 
 fun extractCharacterEncodingFromMetaElement(s: String): Encoding? {
-    TODO()
+    var position = 0
+
+    position = s.indexOf("charset", startIndex = position, ignoreCase = true)
+    if (position < 0) {
+        return null
+    }
+    val equalsValue = s.substring(startIndex = position + "charset".length)
+        .trimStart()
+
+    if (equalsValue[0] != '=') {
+        //TODO loop again
+        return null
+    }
+
+    //Skip past equals character and ignore whitespace before the value
+    val value = equalsValue.substring(1).trimStart()
+
+    val nextCharacter = value[0]
+
+    if (nextCharacter == '"' && value.indexOf('"', startIndex = 1) > 0) {
+        val matchingQuotation = value.indexOf('"', startIndex = 1)
+        return getEncoding(value.substring(1, matchingQuotation))
+    } else if (nextCharacter == '\'' && value.indexOf('\'', startIndex = 1) > 0) {
+        val matchingQuotation = value.indexOf('\'', startIndex = 1)
+        return getEncoding(value.substring(1, matchingQuotation))
+    } else if (isAnUnmatchedCharacter(value, '"')
+        || isAnUnmatchedCharacter(value, '\'')
+        || value.isBlank()
+    ) {
+        return null
+    } else {
+        return getEncoding(value)
+    }
 }
+
+private fun isAnUnmatchedCharacter(value: String, character: Char) =
+    value[1] == character && value.indexOf(character, startIndex = 1) < 0

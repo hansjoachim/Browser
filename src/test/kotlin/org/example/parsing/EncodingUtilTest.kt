@@ -25,5 +25,24 @@ class EncodingUtilTest {
         assertThat(encoding).isNull()
     }
 
-    //TODO testsuite for algorithm to extract from meta
+    @Test
+    fun extract_encoding_from_meta_tag() {
+        val encoding = extractCharacterEncodingFromMetaElement("text/html; charset=utf-8")
+
+        assertThat(encoding).isEqualTo(Encoding.UTF_8)
+    }
+
+    @Test
+    fun extract_encoding_from_meta_tag_quoted() {
+        val encoding = extractCharacterEncodingFromMetaElement("text/html; charset='utf-8'")
+
+        assertThat(encoding).isEqualTo(Encoding.UTF_8)
+    }
+
+    @Test
+    fun extract_encoding_from_meta_tag_misquoted() {
+        val encoding = extractCharacterEncodingFromMetaElement("text/html; charset='utf-8")
+
+        assertThat(encoding).isNull()
+    }
 }
