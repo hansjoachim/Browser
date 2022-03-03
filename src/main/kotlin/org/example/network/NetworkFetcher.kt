@@ -16,7 +16,7 @@ class NetworkFetcher(private val client: HttpClient) {
 
         val response = client.send(request, HttpResponse.BodyHandlers.ofString())
 
-        if (response.statusCode() == 301) {
+        if (response.statusCode() == 301 || response.statusCode() == 302) {
             val possibleLocation = response.headers().firstValue("Location")
             if (possibleLocation.isPresent) {
                 println("Redirected to... ${possibleLocation.get()}")
