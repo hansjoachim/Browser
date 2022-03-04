@@ -288,6 +288,9 @@ class TokenizerTest {
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
 
+    //TODO: ampersand (in &nbsp; )
+    //TODO: bogus comment
+
 
     /**
      * Only works when testing simple cases.
