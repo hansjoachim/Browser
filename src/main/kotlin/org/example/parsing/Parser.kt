@@ -575,6 +575,9 @@ class Parser(document: String) {
             "body" -> {
                 return HTMLBodyElementImpl()
             }
+            "button" -> {
+                return HTMLButtonElementImpl()
+            }
             "div" -> {
                 return HtmlDivElementImpl()
             }
@@ -626,9 +629,18 @@ class Parser(document: String) {
             "ul" -> {
                 return HTMLUListElementImpl()
             }
+            "applet", "bgsound", "blink", "isindex", "keygen", "multicol", "nextid", "spacer" -> {
+                return HTMLUnknownElementImpl(tagName)
+            }
+            "acronym", "basefont", "big", "center", "nobr", "noembed", "noframes", "plaintext", "rb", "rtc", "strike", "tt" -> {
+                return HTMLElementImpl(tagName)
+            }
+            "listing", "xmp" -> {
+                return HTMLPreElementImpl(tagName)
+            }
             else -> {
                 println("Didn't find more specific implementation for $tagName")
-                return HTMLElementImpl(tagName = tagName)
+                return HTMLUnknownElementImpl(tagName)
             }
         }
     }
