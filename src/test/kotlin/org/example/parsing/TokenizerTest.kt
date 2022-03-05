@@ -290,7 +290,7 @@ class TokenizerTest {
 
 
     @Test
-    fun should_tokenize_ampersand() {
+    fun should_tokenize_named_charater_reference() {
         val simpleExample = "<!DOCTYPE html><html><body>&nbsp;</body></html>"
         val tokenizer = Tokenizer(simpleExample)
 
@@ -302,6 +302,71 @@ class TokenizerTest {
             StartTagToken("html"),
             StartTagToken("body"),
             CharacterToken(expectedNbspChar),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Test
+    fun should_tokenize_numeric_reference() {
+        val simpleExample = "<!DOCTYPE html><html><body>&#1576;</body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = allTokens(tokenizer)
+
+        val expectedTokens = listOf(
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            CharacterToken('ب'),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Test
+    fun should_tokenize_hexadecimal_numeric_reference() {
+        val simpleExample = "<!DOCTYPE html><html><body>&#x0631;</body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = allTokens(tokenizer)
+
+        val expectedTokens = listOf(
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            CharacterToken('ر'),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Test
+    fun should_tokenize_unknown_named_charater_reference_in_ambigous_ampersand_state() {
+        val simpleExample = "<!DOCTYPE html><html><body>&xyz;</body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = allTokens(tokenizer)
+
+        val expectedTokens = listOf(
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            //FIXME: should include ampersand, but when we emit more than one character at a time, the are overwritten
+            // CharacterToken('&'),
+            CharacterToken('x'),
+            CharacterToken('y'),
+            CharacterToken('z'),
+            CharacterToken(';'),
             EndTagToken("body"),
             EndTagToken("html"),
             EndOfFileToken()

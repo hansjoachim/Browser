@@ -10,6 +10,8 @@ internal class Tokenizer(document: String) {
         internal const val AMPERSAND = '&'
         internal const val LESS_THAN_SIGN = '<'
         internal const val NULL_CHARACTER = Char.MIN_VALUE
+        internal const val REPLACEMENT_CHARACTER_CODE = 0xFFFD
+        internal const val REPLACEMENT_CHARACTER = REPLACEMENT_CHARACTER_CODE.toChar()
         internal const val EXCLAMATION_MARK = '!'
         internal const val SOLIDUS = '/'
         internal const val GREATER_THAN_SIGN = '>'
@@ -17,6 +19,9 @@ internal class Tokenizer(document: String) {
         internal const val EQUALS_SIGN = '='
         internal const val QUOTATION_MARK = '"'
         internal const val APOSTROPHE = '\''
+        internal const val SEMICOLON = ';'
+        internal const val LATIN_SMALL_LETTER_X = 'x'
+        internal const val LATIN_CAPITAL_LETTER_X = 'X'
 
         internal const val NBSP_CODE = 0x000A0
         internal const val NBSP = NBSP_CODE.toChar()
@@ -34,6 +39,7 @@ internal class Tokenizer(document: String) {
     private var returnState: TokenizationState? = null
 
     private var temporaryBuffer = ""
+    private var characterReferenceCode = 0
 
     fun nextToken(): Token {
         val emitted = tokenize()
@@ -780,37 +786,130 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.AmbiguousAmpersandState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.AmbiguousAmpersandState, consumedCharacter)
+
+                    if (consumedCharacter.isAlpha()) {
+                        //FIXME: as part of attribute
+                        emitAsACharacterToken(consumedCharacter)
+                    } else if (consumedCharacter.matches(SEMICOLON)) {
+                        parseError("unknown-named-character-reference", consumedCharacter)
+                        reconsumeIn(returnState as TokenizationState)
+                    } else {
+                        reconsumeIn(returnState as TokenizationState)
+                    }
                 }
                 TokenizationState.NumericCharacterReferenceState -> {
+                    characterReferenceCode = 0
+
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.NumericCharacterReferenceState, consumedCharacter)
+
+                    if (consumedCharacter.matches(LATIN_SMALL_LETTER_X)
+                        || consumedCharacter.matches(LATIN_CAPITAL_LETTER_X)
+                    ) {
+                        temporaryBuffer += consumedCharacter.character
+                        switchTo(TokenizationState.HexadecimalCharacterReferenceStartState)
+                    } else {
+                        reconsumeIn(TokenizationState.DecimalCharacterReferenceStartState)
+                    }
                 }
                 TokenizationState.HexadecimalCharacterReferenceStartState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.HexadecimalCharacterReferenceStartState, consumedCharacter)
+
+                    if (consumedCharacter.isAsciiHexDigit()) {
+                        reconsumeIn(TokenizationState.HexadecimalCharacterReferenceState)
+                    } else {
+                        parseError("absence-of-digits-in-numeric-character-reference", consumedCharacter)
+                        flushCodePointsConsumedAsACharacterReference()
+                        reconsumeIn(returnState as TokenizationState)
+                    }
                 }
                 TokenizationState.DecimalCharacterReferenceStartState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.DecimalCharacterReferenceStartState, consumedCharacter)
+
+                    if (consumedCharacter.isAsciiDigit()) {
+                        reconsumeIn(TokenizationState.DecimalCharacterReferenceState)
+                    } else {
+                        parseError("absence-of-digits-in-numeric-character-reference", consumedCharacter)
+                        flushCodePointsConsumedAsACharacterReference()
+                        reconsumeIn(returnState as TokenizationState)
+                    }
                 }
                 TokenizationState.HexadecimalCharacterReferenceState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.HexadecimalCharacterReferenceState, consumedCharacter)
+
+                    if (consumedCharacter.isAsciiDigit()) {
+                        characterReferenceCode *= 16
+
+                        val numericVersionOfCurrentInputCharacter = consumedCharacter.character.code - 0x0030
+                        characterReferenceCode += numericVersionOfCurrentInputCharacter
+                    } else if (consumedCharacter.isAsciiUpperHexDigit()) {
+                        characterReferenceCode *= 16
+
+                        val numericVersionOfCurrentInputCharacter = consumedCharacter.character.code - 0x0037
+                        characterReferenceCode += numericVersionOfCurrentInputCharacter
+                    } else if (consumedCharacter.isAsciiLowerHexDigit()) {
+                        characterReferenceCode *= 16
+
+                        val numericVersionOfCurrentInputCharacter = consumedCharacter.character.code - 0x0057
+                        characterReferenceCode += numericVersionOfCurrentInputCharacter
+                    } else if (consumedCharacter.matches(SEMICOLON)) {
+                        switchTo(TokenizationState.NumericCharacterReferenceEndState)
+                    } else {
+                        parseError("missing-semicolon-after-character-reference", consumedCharacter)
+                        reconsumeIn(TokenizationState.NumericCharacterReferenceEndState)
+                    }
                 }
                 TokenizationState.DecimalCharacterReferenceState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.DecimalCharacterReferenceState, consumedCharacter)
+
+                    if (consumedCharacter.isAsciiDigit()) {
+                        characterReferenceCode *= 10
+
+                        val numericVersionOfCurrentInputCharacter = consumedCharacter.character.code - 0x0030
+                        characterReferenceCode += numericVersionOfCurrentInputCharacter
+                    } else if (consumedCharacter.matches(SEMICOLON)) {
+                        switchTo(TokenizationState.NumericCharacterReferenceEndState)
+                    } else {
+                        parseError("missing-semicolon-after-character-reference", consumedCharacter)
+
+                        reconsumeIn(TokenizationState.NumericCharacterReferenceEndState)
+                    }
                 }
                 TokenizationState.NumericCharacterReferenceEndState -> {
-                    val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.NumericCharacterReferenceEndState, consumedCharacter)
+                    checkCharacterReferenceCode()
+                    temporaryBuffer = ""
+                    temporaryBuffer += Char(characterReferenceCode)
+                    flushCodePointsConsumedAsACharacterReference()
+                    switchTo(returnState as TokenizationState)
                 }
             }
         }
 
         return emittedToken as Token
+    }
+
+    private fun checkCharacterReferenceCode() {
+        if (characterReferenceCode == NULL_CHARACTER.code) {
+            parseError(
+                "null-character-reference",
+                InputCharacter(type = InputCharacterType.Character, Char(characterReferenceCode))
+            )
+            characterReferenceCode = REPLACEMENT_CHARACTER_CODE
+        } else if (characterReferenceCode >= 0x10FFFF) {
+            parseError(
+                "character-reference-outside-unicode-range",
+                InputCharacter(type = InputCharacterType.Character, Char(characterReferenceCode))
+            )
+            characterReferenceCode = REPLACEMENT_CHARACTER_CODE
+        } else {
+            println("checked character reference code. The check is not complete, so don't know if we should have reacted to $characterReferenceCode")
+        }
     }
 
     private fun matchInCharacterReferenceTable(): NamedCharacterReference? {
@@ -819,7 +918,7 @@ internal class Tokenizer(document: String) {
 
         while (true) {
             val consumedCharacter = consumeCharacter()
-            temporaryBuffer += consumedCharacter
+            temporaryBuffer += consumedCharacter.character
 
             filteredList = filteredList
                 .filter { it.referenceName.length > index }
