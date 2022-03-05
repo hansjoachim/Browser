@@ -21,6 +21,36 @@ class ParserTest {
     }
 
     @Test
+    fun should_parse_xhtml_example() {
+        val simpleExample = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+<title>XHTML 1.0 Strict Example</title>
+</head>
+<body>
+</body>
+</html>"""
+        val document = Parser(simpleExample).parse()
+
+        val expectedDOM = """#document
+	#comment
+	html
+		head
+			#text
+			title
+				#text
+			#text
+		#text
+		body
+			#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    @Test
     fun should_parse_with_missing_doctype() {
         val simpleExample = "<html><body /></html>"
         val document = Parser(simpleExample).parse()

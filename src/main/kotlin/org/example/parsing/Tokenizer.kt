@@ -7,12 +7,17 @@ import kotlin.text.Charsets.UTF_8
 internal class Tokenizer(document: String) {
 
     companion object {
+        internal const val CHARACTER_TABULATION = 0x0009.toChar()
+        internal const val LINE_FEED = 0x000A.toChar()
+        internal const val FORM_FEED = 0x000C.toChar()
+        internal const val SPACE = 0x0020.toChar()
         internal const val AMPERSAND = '&'
         internal const val LESS_THAN_SIGN = '<'
         internal const val NULL_CHARACTER = Char.MIN_VALUE
         internal const val REPLACEMENT_CHARACTER_CODE = 0xFFFD
         internal const val REPLACEMENT_CHARACTER = REPLACEMENT_CHARACTER_CODE.toChar()
         internal const val EXCLAMATION_MARK = '!'
+        internal const val QUESTION_MARK = '?'
         internal const val SOLIDUS = '/'
         internal const val GREATER_THAN_SIGN = '>'
         internal const val HYPHEN_MINUS = '-'
@@ -123,12 +128,23 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.MarkupDeclarationOpenState)
                     } else if (consumedCharacter.matches(SOLIDUS)) {
                         switchTo(TokenizationState.EndTagOpenState)
-                    } else if (consumedCharacter.isAlpha()) {
+                    } else if (consumedCharacter.isAsciiAlpha()) {
                         currentToken = StartTagToken()
 
                         reconsumeIn(TokenizationState.TagNameState)
+                    } else if (consumedCharacter.matches(QUESTION_MARK)) {
+                        parseError("unexpected-question-mark-instead-of-tag-name", consumedCharacter)
+
+                        currentToken = CommentToken()
+                        reconsumeIn(TokenizationState.BogusCommentState)
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-before-tag-name")
+                        emitACharacterToken(LESS_THAN_SIGN)
+                        emitEndOfFileToken()
                     } else {
-                        unhandledCase(TokenizationState.TagOpenState, consumedCharacter)
+                        parseError("invalid-first-character-of-tag-name", consumedCharacter)
+                        emitACharacterToken(LESS_THAN_SIGN)
+                        reconsumeIn(TokenizationState.DataState)
                     }
                 }
                 TokenizationState.EndTagOpenState -> {
@@ -542,7 +558,19 @@ internal class Tokenizer(document: String) {
                 }
                 TokenizationState.BogusCommentState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.BogusCommentState, consumedCharacter)
+
+                    if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        emitCurrentToken()
+                        emitEndOfFileToken()
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character parse error", consumedCharacter)
+                        (currentToken as CommentToken).data += REPLACEMENT_CHARACTER
+                    } else {
+                        (currentToken as CommentToken).data += consumedCharacter.character
+                    }
                 }
                 TokenizationState.MarkupDeclarationOpenState -> {
                     if (nextCharactersAreCaseInsensitiveMatch("--", inputStream)) {
@@ -658,10 +686,14 @@ internal class Tokenizer(document: String) {
                     unhandledCase(TokenizationState.CommentEndBangState, consumedCharacter)
                 }
                 TokenizationState.DOCTYPEState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.isWhitespace()) {
                         switchTo(TokenizationState.BeforeDOCTYPENameState)
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        reconsumeIn(TokenizationState.BeforeDOCTYPENameState)
+                        //FIXME: eof cases
                     } else {
                         unhandledCase(TokenizationState.DOCTYPEState, consumedCharacter)
                     }
@@ -669,54 +701,169 @@ internal class Tokenizer(document: String) {
                 TokenizationState.BeforeDOCTYPENameState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter.isAlpha()) {
-                        //FIXME names should be marked as missing (according to spec)
-
-                        val initialName = consumedCharacter.character.toString()
-                        currentToken = DOCTYPEToken(initialName)
+                    if (consumedCharacter.isWhitespace()) {
+                        //Ignore
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        currentToken = DOCTYPEToken()
+                        val lowerCaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
+                        (currentToken as DOCTYPEToken).name = lowerCaseVersionOfTheCurrentInputCharacter.toString()
 
                         switchTo(TokenizationState.DOCTYPENameState)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character parse error", consumedCharacter)
+                        currentToken = DOCTYPEToken()
+                        (currentToken as DOCTYPEToken).name = REPLACEMENT_CHARACTER.toString()
+
+                        switchTo(TokenizationState.DOCTYPENameState)
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        parseError("missing-doctype-name", consumedCharacter)
+                        currentToken = DOCTYPEToken()
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-doctype", consumedCharacter)
+                        currentToken = DOCTYPEToken()
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        emitCurrentToken()
+                        emitEndOfFileToken()
                     } else {
-                        unhandledCase(TokenizationState.BeforeDOCTYPENameState, consumedCharacter)
+                        currentToken = DOCTYPEToken()
+                        (currentToken as DOCTYPEToken).name = consumedCharacter.character.toString()
+                        switchTo(TokenizationState.DOCTYPENameState)
                     }
                 }
                 TokenizationState.DOCTYPENameState -> {
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                    if (consumedCharacter.isWhitespace()) {
+                        switchTo(TokenizationState.AfterDOCTYPENameState)
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
                         emitCurrentToken()
                         switchTo(TokenizationState.DataState)
+                        //FIXME: other cases
                     } else {
                         (currentToken as DOCTYPEToken).name += consumedCharacter.character
                     }
                 }
                 TokenizationState.AfterDOCTYPENameState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.AfterDOCTYPENameState, consumedCharacter)
+
+                    if (consumedCharacter.isWhitespace()) {
+                        //Ignore
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-doctype", consumedCharacter)
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        emitCurrentToken()
+                        emitEndOfFileToken()
+                    } else {
+                        //Look for a match including the current charact so need to reset it so it can be parsed as the first match
+                        //Might be a bit hacky :/
+                        inputStream.reset()
+
+                        if (nextCharactersAreCaseInsensitiveMatch("PUBLIC", inputStream)) {
+                            consumeCharacters("PUBLIC")
+                            switchTo(TokenizationState.AfterDOCTYPEPublicKeywordState)
+                        } else if (nextCharactersAreCaseInsensitiveMatch("SYSTEM", inputStream)) {
+                            consumeCharacters("SYSTEM")
+                            switchTo(TokenizationState.AfterDOCTYPESystemKeywordState)
+                        } else {
+                            parseError("invalid-character-sequence-after-doctype-name", consumedCharacter)
+                            (currentToken as DOCTYPEToken).forceQuirks = "on"
+                            reconsumeIn(TokenizationState.BogusDOCTYPEState)
+                        }
+                    }
                 }
                 TokenizationState.AfterDOCTYPEPublicKeywordState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.AfterDOCTYPEPublicKeywordState, consumedCharacter)
+
+                    if (consumedCharacter.isWhitespace()) {
+                        switchTo(TokenizationState.BeforeDOCTYPEPublicIdentifierState)
+                        //FIXME: other cases
+                    } else {
+                        unhandledCase(TokenizationState.AfterDOCTYPEPublicKeywordState, consumedCharacter)
+                    }
                 }
                 TokenizationState.BeforeDOCTYPEPublicIdentifierState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.BeforeDOCTYPEPublicIdentifierState, consumedCharacter)
+
+                    if (consumedCharacter.isWhitespace()) {
+                        // Ignore
+                    } else if (consumedCharacter.matches(QUOTATION_MARK)) {
+                        (currentToken as DOCTYPEToken).publicIdentifier = ""
+                        switchTo(TokenizationState.DOCTYPEPublicIdentifierDoubleQuotedState)
+                    } else if (consumedCharacter.matches(APOSTROPHE)) {
+                        (currentToken as DOCTYPEToken).publicIdentifier = ""
+                        switchTo(TokenizationState.DOCTYPEPublicIdentifierSingleQuotedState)
+                        //FIXME: more cases
+                    } else {
+                        unhandledCase(TokenizationState.BeforeDOCTYPEPublicIdentifierState, consumedCharacter)
+                    }
                 }
                 TokenizationState.DOCTYPEPublicIdentifierDoubleQuotedState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.DOCTYPEPublicIdentifierDoubleQuotedState, consumedCharacter)
+
+                    if (consumedCharacter.matches(QUOTATION_MARK)) {
+                        switchTo(TokenizationState.AfterDOCTYPEPublicIdentifierState)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character parse error", consumedCharacter)
+                        (currentToken as DOCTYPEToken).publicIdentifier += REPLACEMENT_CHARACTER
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        parseError("abrupt-doctype-public-identifier", consumedCharacter)
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-doctype", consumedCharacter)
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        emitCurrentToken()
+                        emitEndOfFileToken()
+                    } else {
+                        (currentToken as DOCTYPEToken).publicIdentifier += consumedCharacter.character
+                    }
                 }
                 TokenizationState.DOCTYPEPublicIdentifierSingleQuotedState -> {
                     val consumedCharacter = consumeCharacter()
+
                     unhandledCase(TokenizationState.DOCTYPEPublicIdentifierSingleQuotedState, consumedCharacter)
                 }
                 TokenizationState.AfterDOCTYPEPublicIdentifierState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.AfterDOCTYPEPublicIdentifierState, consumedCharacter)
+                    if (consumedCharacter.isWhitespace()) {
+                        switchTo(TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState)
+                        //FIXME: more cases
+                    } else {
+                        unhandledCase(TokenizationState.AfterDOCTYPEPublicIdentifierState, consumedCharacter)
+                    }
                 }
                 TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState, consumedCharacter)
+
+                    if (consumedCharacter.isWhitespace()) {
+                        //Ignore
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.matches(QUOTATION_MARK)) {
+                        (currentToken as DOCTYPEToken).systemIdentifier = ""
+                        switchTo(TokenizationState.DOCTYPESystemIdentifierDoubleQuotedState)
+                    } else if (consumedCharacter.matches(APOSTROPHE)) {
+                        (currentToken as DOCTYPEToken).systemIdentifier = ""
+                        switchTo(TokenizationState.DOCTYPESystemIdentifierSingleQuotedState)
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-doctype", consumedCharacter)
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        emitCurrentToken()
+                        emitEndOfFileToken()
+                    } else {
+                        parseError("missing-quote-before-doctype-system-identifier", consumedCharacter)
+                        reconsumeIn(TokenizationState.BogusDOCTYPEState)
+                    }
                 }
                 TokenizationState.AfterDOCTYPESystemKeywordState -> {
                     val consumedCharacter = consumeCharacter()
@@ -728,15 +875,48 @@ internal class Tokenizer(document: String) {
                 }
                 TokenizationState.DOCTYPESystemIdentifierDoubleQuotedState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.DOCTYPESystemIdentifierDoubleQuotedState, consumedCharacter)
+
+                    if (consumedCharacter.matches(QUOTATION_MARK)) {
+                        switchTo(TokenizationState.AfterDOCTYPESystemIdentifierState)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        (currentToken as DOCTYPEToken).systemIdentifier += REPLACEMENT_CHARACTER
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        parseError("abrupt-doctype-system-identifier", consumedCharacter)
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-doctype", consumedCharacter)
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        emitCurrentToken()
+                        emitEndOfFileToken()
+                    } else {
+                        (currentToken as DOCTYPEToken).systemIdentifier += consumedCharacter.character
+                    }
                 }
                 TokenizationState.DOCTYPESystemIdentifierSingleQuotedState -> {
                     val consumedCharacter = consumeCharacter()
                     unhandledCase(TokenizationState.DOCTYPESystemIdentifierSingleQuotedState, consumedCharacter)
                 }
                 TokenizationState.AfterDOCTYPESystemIdentifierState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.AfterDOCTYPESystemIdentifierState, consumedCharacter)
+
+                    if (consumedCharacter.isWhitespace()) {
+                        //Ignore
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-doctype", consumedCharacter)
+                        (currentToken as DOCTYPEToken).forceQuirks = "on"
+                        emitCurrentToken()
+                        emitEndOfFileToken()
+                    } else {
+                        parseError("unexpected-character-after-doctype-system-identifier", consumedCharacter)
+                        reconsumeIn(TokenizationState.BogusDOCTYPEState)
+                    }
                 }
                 TokenizationState.BogusDOCTYPEState -> {
                     val consumedCharacter = consumeCharacter()

@@ -3,10 +3,10 @@ package org.example.parsing
 open class Token
 
 
-class DOCTYPEToken(var name: String) : Token() {
-    val publicIdentifier: String = "missing"
-    val systemIdentifier: String = "missing"
-    val forceQuirks: String = "off"
+class DOCTYPEToken(var name: String= "missing") : Token() {
+    var publicIdentifier: String = "missing"
+    var systemIdentifier: String = "missing"
+    var forceQuirks: String = "off"
 
     override fun toString(): String {
         return "DOCTYPEToken(name='$name')"

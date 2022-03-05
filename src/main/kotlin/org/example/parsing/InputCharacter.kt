@@ -1,5 +1,10 @@
 package org.example.parsing
 
+import org.example.parsing.Tokenizer.Companion.CHARACTER_TABULATION
+import org.example.parsing.Tokenizer.Companion.FORM_FEED
+import org.example.parsing.Tokenizer.Companion.LINE_FEED
+import org.example.parsing.Tokenizer.Companion.SPACE
+
 
 enum class InputCharacterType {
     Character,
@@ -18,7 +23,7 @@ class InputCharacter(
         return type == InputCharacterType.EndOfFile
     }
 
-    //FIXME: more precise
+    @Deprecated("FIXME: replace with isAsciiAlpha or more specific")
     fun isAlpha(): Boolean {
         return type == InputCharacterType.Character && Character.isAlphabetic(character.code)
     }
@@ -43,10 +48,29 @@ class InputCharacter(
         return type == InputCharacterType.Character && character.code >= 0x0041 && character.code <= 0x005A
     }
 
-    fun isWhitespace(): Boolean {
-        return type == InputCharacterType.Character && Character.isWhitespace(character.code)
+    fun isAsciiLowerAlpha(): Boolean {
+        return type == InputCharacterType.Character && character.code >= 0x0061 && character.code <= 0x007A
     }
 
+    fun isAsciiAlpha(): Boolean {
+        return isAsciiUpperAlpha() || isAsciiLowerAlpha()
+    }
+
+    fun isAsciiAlphaNumeric(): Boolean {
+        return isAsciiDigit() || isAsciiAlpha()
+    }
+
+    fun isWhitespace(): Boolean {
+        val whiteSpaceCharacters = listOf(
+            CHARACTER_TABULATION,
+            LINE_FEED,
+            FORM_FEED,
+            SPACE,
+        )
+        return type == InputCharacterType.Character && whiteSpaceCharacters.contains(character)
+    }
+
+    @Deprecated("FIXME: replace with isAsciiUpperAlpha or more relevant")
     fun isUpperCase(): Boolean {
         return type == InputCharacterType.Character && Character.isUpperCase(character.code)
     }

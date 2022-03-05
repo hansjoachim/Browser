@@ -377,8 +377,6 @@ class TokenizerTest {
 
     //TODO: more namedCharacterReferences...
     //TOOD: mark parse errors, update usage of temporary buffer now that it exists
-    //TODO: bogus comment (both of these via xhtml document?)
-    //TODO: advanced doctypes
     //TODO: CDATA
 
     /**
