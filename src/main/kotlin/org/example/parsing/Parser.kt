@@ -590,6 +590,9 @@ class Parser(document: String) {
             "head" -> {
                 return HTMLHeadElementImpl()
             }
+            "hr" -> {
+                return HTMLHRElementImpl()
+            }
             "img" -> {
                 return HTMLImageElementImpl()
             }
