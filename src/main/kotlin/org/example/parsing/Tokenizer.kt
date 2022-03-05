@@ -4,18 +4,24 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import kotlin.text.Charsets.UTF_8
 
-private const val AMPERSAND = '&'
-private const val LESS_THAN_SIGN = '<'
-private const val NULL_CHARACTER = Char.MIN_VALUE
-private const val EXCLAMATION_MARK = '!'
-private const val SOLIDUS = '/'
-private const val GREATER_THAN_SIGN = '>'
-private const val HYPHEN_MINUS = '-'
-private const val EQUALS_SIGN = '='
-private const val QUOTATION_MARK = '"'
-private const val APOSTROPHE = '\''
-
 internal class Tokenizer(document: String) {
+
+    companion object {
+        internal const val AMPERSAND = '&'
+        internal const val LESS_THAN_SIGN = '<'
+        internal const val NULL_CHARACTER = Char.MIN_VALUE
+        internal const val EXCLAMATION_MARK = '!'
+        internal const val SOLIDUS = '/'
+        internal const val GREATER_THAN_SIGN = '>'
+        internal const val HYPHEN_MINUS = '-'
+        internal const val EQUALS_SIGN = '='
+        internal const val QUOTATION_MARK = '"'
+        internal const val APOSTROPHE = '\''
+
+        internal const val NBSP_CODE = 0x000A0
+        internal const val NBSP = NBSP_CODE.toChar()
+    }
+
     //TODO: stringstream instead of bytes to skip conversion back and forth?
     private val inputStream: InputStream = ByteArrayInputStream(document.toByteArray(UTF_8))
     private var currentToken: Token? = null
@@ -26,6 +32,8 @@ internal class Tokenizer(document: String) {
     private var state = TokenizationState.DataState
 
     private var returnState: TokenizationState? = null
+
+    private var temporaryBuffer = ""
 
     fun nextToken(): Token {
         val emitted = tokenize()
@@ -662,6 +670,8 @@ internal class Tokenizer(document: String) {
                         currentToken = DOCTYPEToken(initialName)
 
                         switchTo(TokenizationState.DOCTYPENameState)
+                    } else {
+                        unhandledCase(TokenizationState.BeforeDOCTYPENameState, consumedCharacter)
                     }
                 }
                 TokenizationState.DOCTYPENameState -> {
@@ -739,12 +749,35 @@ internal class Tokenizer(document: String) {
                     unhandledCase(TokenizationState.CDATASectionEndState, consumedCharacter)
                 }
                 TokenizationState.CharacterReferenceState -> {
+                    temporaryBuffer = ""
+                    temporaryBuffer += AMPERSAND
+
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.CharacterReferenceState, consumedCharacter)
+
+                    if (consumedCharacter.isAlpha()) {
+                        reconsumeIn(TokenizationState.NamedCharacterReferenceState)
+                    } else if (consumedCharacter.matches('#')) {
+                        temporaryBuffer += consumedCharacter.character
+                        switchTo(TokenizationState.NumericCharacterReferenceState)
+                    } else {
+                        flushCodePointsConsumedAsACharacterReference()
+                        reconsumeIn(returnState as TokenizationState)
+                    }
                 }
                 TokenizationState.NamedCharacterReferenceState -> {
-                    val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.NamedCharacterReferenceState, consumedCharacter)
+                    val possibleMatch = matchInCharacterReferenceTable()
+                    if (possibleMatch != null) {
+                        //FIXME: deal with attributes
+
+                        temporaryBuffer = ""
+                        temporaryBuffer += Char(possibleMatch.character)
+                        flushCodePointsConsumedAsACharacterReference()
+                        switchTo(returnState as TokenizationState)
+                    } else {
+                        flushCodePointsConsumedAsACharacterReference()
+                        switchTo(TokenizationState.AmbiguousAmpersandState)
+                    }
                 }
                 TokenizationState.AmbiguousAmpersandState -> {
                     val consumedCharacter = consumeCharacter()
@@ -778,6 +811,38 @@ internal class Tokenizer(document: String) {
         }
 
         return emittedToken as Token
+    }
+
+    private fun matchInCharacterReferenceTable(): NamedCharacterReference? {
+        var index = 0
+        var filteredList = NamedCharacterReference.values().toMutableList()
+
+        while (true) {
+            val consumedCharacter = consumeCharacter()
+            temporaryBuffer += consumedCharacter
+
+            filteredList = filteredList
+                .filter { it.referenceName.length > index }
+                .filter { it.referenceName[index] == consumedCharacter.character } as MutableList<NamedCharacterReference>
+
+            if (filteredList.isEmpty()) {
+                return null
+            } else if (filteredList.size == 1) {
+                val referenceNameLength = filteredList.first().referenceName.length
+                val charactersRead = index + 1
+                val hasMatchedCompleteName = referenceNameLength == charactersRead
+                if (hasMatchedCompleteName) {
+                    return filteredList.first()
+                }
+            }
+            index++
+        }
+
+    }
+
+    private fun flushCodePointsConsumedAsACharacterReference() {
+        //FIXME: should deal with attributes, or else
+        temporaryBuffer.toCharArray().map { emitACharacterToken(it) }
     }
 
     data class ParseError(val errorMessage: String, val inputCharacter: InputCharacter?)

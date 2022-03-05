@@ -288,9 +288,33 @@ class TokenizerTest {
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
 
-    //TODO: ampersand (in &nbsp; )
-    //TODO: bogus comment
 
+    @Test
+    fun should_tokenize_ampersand() {
+        val simpleExample = "<!DOCTYPE html><html><body>&nbsp;</body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = allTokens(tokenizer)
+
+        val expectedNbspChar = Char(0x00A0)
+        val expectedTokens = listOf(
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            CharacterToken(expectedNbspChar),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    //TODO: more namedCharacterReferences...
+    //TOOD: mark parse errors, update usage of temporary buffer now that it exists
+    //TODO: bogus comment (both of these via xhtml document?)
+    //TODO: advanced doctypes
+    //TODO: CDATA
 
     /**
      * Only works when testing simple cases.

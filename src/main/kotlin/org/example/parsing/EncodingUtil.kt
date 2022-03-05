@@ -19,7 +19,6 @@ enum class Encoding(val encodingName: String, val labels: List<String>) {
     //TODO: legacy encodings missing from enum
 }
 
-
 fun getEncoding(label: String): Encoding? {
     val trimmedLabel = label.trim()
     return Encoding.values()
