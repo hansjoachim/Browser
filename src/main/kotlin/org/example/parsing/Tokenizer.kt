@@ -36,6 +36,7 @@ internal class Tokenizer(document: String) {
     private val inputStream: InputStream = ByteArrayInputStream(document.toByteArray(UTF_8))
     private var currentToken: Token? = null
     private var emittedTokens = mutableListOf<Token>()
+    private var lastEmittedStartTagToken: StartTagToken? = null
 
     private val parseErrors: MutableList<ParseError> = mutableListOf()
 
@@ -173,7 +174,6 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.TagNameState -> {
-                    //FIXME: all cases above are handled, move on further down from here
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.isWhitespace()) {
@@ -181,10 +181,17 @@ internal class Tokenizer(document: String) {
                     } else if (consumedCharacter.matches(SOLIDUS)) {
                         switchTo(TokenizationState.SelfClosingStartTagState)
                     } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
-                        emitCurrentToken()
                         switchTo(TokenizationState.DataState)
-                    } else if (consumedCharacter.isUpperCase()) {
-                        (currentToken as TagToken).tagName += consumedCharacter.toLowerCase()
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        val lowercaseVersionOfTheCurrentInputToken = consumedCharacter.character + 0x0020
+                        (currentToken as TagToken).tagName += lowercaseVersionOfTheCurrentInputToken
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        (currentToken as TagToken).tagName += REPLACEMENT_CHARACTER
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-tag", consumedCharacter)
+                        emitEndOfFileToken()
                     } else {
                         (currentToken as TagToken).tagName += consumedCharacter.character
                     }
@@ -192,8 +199,9 @@ internal class Tokenizer(document: String) {
                 TokenizationState.RCDATALessThanSignState -> {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
+
                     if (consumedCharacter.matches(SOLIDUS)) {
-                        //TODO set the temporary buffer to the empty string
+                        temporaryBuffer = ""
                         switchTo(TokenizationState.RCDATAEndTagOpenState)
                     } else {
                         emitACharacterToken(LESS_THAN_SIGN)
@@ -203,7 +211,8 @@ internal class Tokenizer(document: String) {
                 TokenizationState.RCDATAEndTagOpenState -> {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    if (consumedCharacter.isAlpha()) {
+
+                    if (consumedCharacter.isAsciiAlpha()) {
                         currentToken = EndTagToken()
                         reconsumeIn(TokenizationState.RCDATAEndTagNameState)
                     } else {
@@ -216,23 +225,35 @@ internal class Tokenizer(document: String) {
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.isWhitespace()) {
-                        //TODO: If the current end tag token is an appropriate end tag token,
-                        switchTo(TokenizationState.BeforeAttributeNameState)
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.BeforeAttributeNameState)
+                        } else {
+                            RCDATAEndTagNameStateAnythingElse()
+                        }
                     } else if (consumedCharacter.matches(SOLIDUS)) {
-                        //TODO: If the current end tag token is an appropriate end tag token,
-                        switchTo(TokenizationState.SelfClosingStartTagState)
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.SelfClosingStartTagState)
+                        } else {
+                            RCDATAEndTagNameStateAnythingElse()
+                        }
                     } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
-                        //TODO: If the current end tag token is an appropriate end tag token,
-                        switchTo(TokenizationState.DataState)
-                        emitCurrentToken()
-                        //FIXME: uppercase/lowercase
-                    } else if (consumedCharacter.isAlpha()) {
-                        (currentToken as TagToken).tagName += consumedCharacter.character
-                        //TODO also append to the temporary buffer
-                    } else {
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.DataState)
+                            emitCurrentToken()
+                        } else {
+                            RCDATAEndTagNameStateAnythingElse()
+                        }
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        val lowercaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
+                        (currentToken as TagToken).tagName += lowercaseVersionOfTheCurrentInputCharacter
 
-                        //uses the temporary buffer
-                        unhandledCase(TokenizationState.RCDATAEndTagNameState, consumedCharacter)
+                        temporaryBuffer += consumedCharacter.character
+                    } else if (consumedCharacter.isAsciiLowerAlpha()) {
+                        (currentToken as TagToken).tagName += consumedCharacter.character
+
+                        temporaryBuffer += consumedCharacter.character
+                    } else {
+                        RCDATAEndTagNameStateAnythingElse()
                     }
                 }
                 TokenizationState.RAWTEXTLessThanSignState -> {
@@ -240,7 +261,7 @@ internal class Tokenizer(document: String) {
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.matches(SOLIDUS)) {
-                        //TODO Set the temporary buffer to the empty string.
+                        temporaryBuffer = ""
                         switchTo(TokenizationState.RAWTEXTEndTagOpenState)
                     } else {
                         emitACharacterToken(LESS_THAN_SIGN)
@@ -252,7 +273,7 @@ internal class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter.isAlpha()) {
+                    if (consumedCharacter.isAsciiAlpha()) {
                         currentToken = EndTagToken()
                         reconsumeIn(TokenizationState.RAWTEXTEndTagNameState)
                     } else {
@@ -263,23 +284,37 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.RAWTEXTEndTagNameState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
+
                     if (consumedCharacter.isWhitespace()) {
-                        //TODO If the current end tag token is an appropriate end tag token,
-                        switchTo(TokenizationState.BeforeAttributeNameState)
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.BeforeAttributeNameState)
+                        } else {
+                            RAWTEXTEndTagNameStateAnythingElse()
+                        }
                     } else if (consumedCharacter.matches(SOLIDUS)) {
-                        //TODO If the current end tag token is an appropriate end tag token,
-                        switchTo(TokenizationState.SelfClosingStartTagState)
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.SelfClosingStartTagState)
+                        } else {
+                            RAWTEXTEndTagNameStateAnythingElse()
+                        }
                     } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
-                        //TODO If the current end tag token is an appropriate end tag token,
-                        switchTo(TokenizationState.DataState)
-                        emitCurrentToken()
-                        //FIXME: uppercase/lowercase
-                    } else if (consumedCharacter.isAlpha()) {
-                        (currentToken as TagToken).tagName += consumedCharacter
-                        //TODO also append to the temporary buffer
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.DataState)
+                            emitCurrentToken()
+                        } else {
+                            RAWTEXTEndTagNameStateAnythingElse()
+                        }
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        val lowercaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
+                        (currentToken as TagToken).tagName += lowercaseVersionOfTheCurrentInputCharacter
+                        temporaryBuffer += consumedCharacter.character
+                    } else if (consumedCharacter.isAsciiLowerAlpha()) {
+                        (currentToken as TagToken).tagName += consumedCharacter.character
+                        temporaryBuffer += consumedCharacter.character
                     } else {
-                        unhandledCase(TokenizationState.RAWTEXTEndTagNameState, consumedCharacter)
+                        RAWTEXTEndTagNameStateAnythingElse()
                     }
                 }
                 TokenizationState.ScriptDataLessThanSignState -> {
@@ -287,7 +322,7 @@ internal class Tokenizer(document: String) {
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.matches(SOLIDUS)) {
-                        //FIXME: deal with temporary buffer
+                        temporaryBuffer = ""
                         switchTo(TokenizationState.ScriptDataEndTagOpenState)
                     } else if (consumedCharacter.matches(EXCLAMATION_MARK)) {
                         switchTo(TokenizationState.ScriptDataEscapeStartState)
@@ -302,7 +337,7 @@ internal class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter.isAlpha()) {
+                    if (consumedCharacter.isAsciiAlpha()) {
                         currentToken = EndTagToken()
                         reconsumeIn(TokenizationState.ScriptDataEndTagNameState)
                     } else {
@@ -312,18 +347,37 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.ScriptDataEndTagNameState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    //TODO: multiple other cases
-                    if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
-                        //FIXME: If the current end tag token is an appropriate end tag token,
-                        switchTo(TokenizationState.DataState)
-                        emitCurrentToken()
-                    } else if (consumedCharacter.isAlpha()) {
+                    if (consumedCharacter.isWhitespace()) {
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.BeforeAttributeNameState)
+                        } else {
+                            ScriptDataEndTagNameStateAnythingElse()
+                        }
+                    } else if (consumedCharacter.matches(SOLIDUS)) {
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.SelfClosingStartTagState)
+                        } else {
+                            ScriptDataEndTagNameStateAnythingElse()
+                        }
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.DataState)
+                            emitCurrentToken()
+                        } else {
+                            ScriptDataEndTagNameStateAnythingElse()
+                        }
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        val lowercaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
+                        (currentToken as EndTagToken).tagName += lowercaseVersionOfTheCurrentInputCharacter
+                        temporaryBuffer += consumedCharacter.character
+                    } else if (consumedCharacter.isAsciiLowerAlpha()) {
                         (currentToken as EndTagToken).tagName += consumedCharacter.character
-                        //FIXME: Also append to the temporary buffer
+                        temporaryBuffer += consumedCharacter.character
                     } else {
-                        unhandledCase(TokenizationState.ScriptDataEndTagNameState, consumedCharacter)
+                        ScriptDataEndTagNameStateAnythingElse()
                     }
                 }
                 TokenizationState.ScriptDataEscapeStartState -> {
@@ -356,15 +410,18 @@ internal class Tokenizer(document: String) {
                         emitACharacterToken(HYPHEN_MINUS)
                     } else if (consumedCharacter.matches(LESS_THAN_SIGN)) {
                         switchTo(TokenizationState.ScriptDataEscapedLessThanSignState)
-                        //TODO: if null
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
                     } else if (consumedCharacter.isEndOfFile()) {
-                        // This is an eof-in-script-html-comment-like-text parse error.
+                        parseError("eof-in-script-html-comment-like-text", consumedCharacter)
                         emitEndOfFileToken()
                     } else {
                         emitAsACharacterToken(consumedCharacter)
                     }
                 }
                 TokenizationState.ScriptDataEscapedDashState -> {
+                    //FIXME: all cases above are handled, move on further down from here
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.matches(HYPHEN_MINUS)) {
@@ -1118,6 +1175,34 @@ internal class Tokenizer(document: String) {
         return emittedTokens.removeFirst()
     }
 
+    private fun ScriptDataEndTagNameStateAnythingElse() {
+        emitACharacterToken(LESS_THAN_SIGN)
+        emitACharacterToken(SOLIDUS)
+        temporaryBuffer.toCharArray().forEach { emitACharacterToken(it) }
+
+        reconsumeIn(TokenizationState.ScriptDataState)
+    }
+
+    private fun RAWTEXTEndTagNameStateAnythingElse() {
+        emitACharacterToken(LESS_THAN_SIGN)
+        emitACharacterToken(SOLIDUS)
+        temporaryBuffer.toCharArray().forEach { emitACharacterToken(it) }
+
+        reconsumeIn(TokenizationState.RAWTEXTState)
+    }
+
+    private fun RCDATAEndTagNameStateAnythingElse() {
+        emitACharacterToken(LESS_THAN_SIGN)
+        emitACharacterToken(SOLIDUS)
+        temporaryBuffer.toCharArray().map { emitACharacterToken(it) }
+
+        reconsumeIn(TokenizationState.RCDATAState)
+    }
+
+    private fun isAnAppropriateEndTagToken(endTagToken: EndTagToken): Boolean {
+        return lastEmittedStartTagToken != null && lastEmittedStartTagToken!!.tagName == endTagToken.tagName
+    }
+
     private fun checkCharacterReferenceCode() {
         if (characterReferenceCode == NULL_CHARACTER.code) {
             parseError(
@@ -1216,8 +1301,16 @@ internal class Tokenizer(document: String) {
         emit(CharacterToken(consumedCharacter))
     }
 
-    private fun emit(token: Token) {
-        emittedTokens.add(token)
+    private fun emit(token: Token, reprocess: Boolean = false) {
+        if (token is StartTagToken) {
+            lastEmittedStartTagToken = token
+        }
+
+        if (reprocess) {
+            emittedTokens.add(0, token)
+        } else {
+            emittedTokens.add(token)
+        }
     }
 
     private fun consumeCharacters(string: String) {
@@ -1259,6 +1352,6 @@ internal class Tokenizer(document: String) {
     }
 
     internal fun reprocess(token: Token) {
-        emittedTokens.add(0, token)
+        emit(token, reprocess = true)
     }
 }

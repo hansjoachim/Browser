@@ -70,15 +70,6 @@ class InputCharacter(
         return type == InputCharacterType.Character && whiteSpaceCharacters.contains(character)
     }
 
-    @Deprecated("FIXME: replace with isAsciiUpperAlpha or more relevant")
-    fun isUpperCase(): Boolean {
-        return type == InputCharacterType.Character && Character.isUpperCase(character.code)
-    }
-
-    fun toLowerCase(): Char {
-        return Character.toLowerCase(character)
-    }
-
     override fun toString(): String {
         return "InputCharacter(type=$type, character=$character)"
     }
