@@ -83,9 +83,7 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.RCDATALessThanSignState)
                     } else if (consumedCharacter.matches(NULL_CHARACTER)) {
                         parseError("unexpected-null-character", consumedCharacter)
-                        //FIXME: all cases above are handled, move on further down from here
-                        //TODO: represent replacement character as a const  emitAsACharacterToken(U+FFFD REPLACEMENT CHARACTER )
-                        unhandledCase(TokenizationState.RCDATAState, consumedCharacter)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
                     } else if (consumedCharacter.isEndOfFile()) {
                         emitEndOfFileToken()
                     } else {
@@ -97,7 +95,9 @@ internal class Tokenizer(document: String) {
 
                     if (consumedCharacter.matches(LESS_THAN_SIGN)) {
                         switchTo(TokenizationState.RAWTEXTLessThanSignState)
-                        //TODO: null character
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
                     } else if (consumedCharacter.isEndOfFile()) {
                         emitEndOfFileToken()
                     } else {
@@ -109,7 +109,9 @@ internal class Tokenizer(document: String) {
 
                     if (consumedCharacter.matches(LESS_THAN_SIGN)) {
                         switchTo(TokenizationState.ScriptDataLessThanSignState)
-                        //TODO: or null
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
                     } else if (consumedCharacter.isEndOfFile()) {
                         emitEndOfFileToken()
                     } else {
@@ -118,7 +120,15 @@ internal class Tokenizer(document: String) {
                 }
                 TokenizationState.PLAINTEXTState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.PLAINTEXTState, consumedCharacter)
+
+                    if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        emitEndOfFileToken()
+                    } else {
+                        emitAsACharacterToken(consumedCharacter)
+                    }
                 }
                 TokenizationState.TagOpenState -> {
                     inputStream.mark(1)
@@ -151,14 +161,25 @@ internal class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter.isAlpha()) {
+                    if (consumedCharacter.isAsciiAlpha()) {
                         currentToken = EndTagToken()
                         reconsumeIn(TokenizationState.TagNameState)
+                    } else if(consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        parseError("missing-end-tag-name", consumedCharacter)
+                        switchTo(TokenizationState.DataState)
+                    } else if(consumedCharacter.isEndOfFile()) {
+                        parseError("eof-before-tag-name", consumedCharacter)
+                        emitACharacterToken(LESS_THAN_SIGN)
+                        emitACharacterToken(SOLIDUS)
+                        emitEndOfFileToken()
                     } else {
-                        unhandledCase(TokenizationState.EndTagOpenState, consumedCharacter)
+                        parseError("invalid-first-character-of-tag-name", consumedCharacter)
+                        currentToken = CommentToken()
+                        reconsumeIn(TokenizationState.BogusCommentState)
                     }
                 }
                 TokenizationState.TagNameState -> {
+                    //FIXME: all cases above are handled, move on further down from here
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.isWhitespace()) {

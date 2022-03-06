@@ -229,6 +229,7 @@ class ParserTest {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
+    //FIXME: expand with script tags in body
     @Test
     fun should_parse_script() {
         val simpleExample = """
@@ -260,6 +261,37 @@ function comparison(a, b)  {
 """
         val tree = DOMDebugger.getDOMTree(document)
         assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    @Test
+    fun should_parse_plaintext() {
+        val simpleExample = """
+<!DOCTYPE html>
+<html>
+<body>
+<div></div>
+<plaintext>
+This tag can contain lots of fun stuff, and it never even ends
+</plaintext>
+<div><!-- That's why this won't show up --></div>
+</body>
+</html>
+"""
+        val document = Parser(simpleExample).parse()
+
+        val expectedDOM = """#document
+	html
+		head
+		body
+			#text
+			div
+			#text
+			plaintext
+				#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+
     }
 
     //TODO: expected this would break with the simple popping of current element. Let's revisit this in a while
@@ -332,6 +364,5 @@ function comparison(a, b)  {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
-//TODO: script tags in body
 //TODO: emit more than one thing to a list/stream?
 }

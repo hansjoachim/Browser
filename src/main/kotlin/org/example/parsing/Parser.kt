@@ -1,6 +1,7 @@
 package org.example.parsing
 
 import org.example.html.*
+import org.example.parsing.Tokenizer.Companion.NULL_CHARACTER
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node
@@ -278,15 +279,22 @@ class Parser(document: String) {
                     }
                 }
                 InsertionMode.inBody -> {
-                    if (token is CharacterToken && isWhitespace(token.data)) {
-                        //FIXME: reconstruct the active formatting elements
+                    if (token is CharacterToken && token.data == NULL_CHARACTER) {
+                        //TODO parseError without comment/type in spec
+                        //Ignore
+                        //FIXME: replace whitespace check
+                    } else if (token is CharacterToken && isWhitespace(token.data)) {
+                        reconstructTheActiveFormattingElements()
                         insertCharacter(token)
                     } else if (token is CharacterToken) {
-                        //FIXME: reconstruct the active formatting elements
+                        reconstructTheActiveFormattingElements()
                         insertCharacter(token)
                         framsetOk = false
                     } else if (token is CommentToken) {
                         insertComment(token)
+                    } else if (token is DOCTYPEToken) {
+                        //TODO parseError without comment/type in spec
+                        //Ignore
                     } else if (token is EndTagToken && token.tagName == "body") {
                         //Check stack and look for parse errors
                         switchTo(InsertionMode.afterBody)
@@ -322,9 +330,9 @@ class Parser(document: String) {
                             "ul"
                         ).contains(token.tagName)
                     ) {
-//                        if(openElementsHasAPElementInButtonScope()) {
-//                            closePElement()
-//                        }
+                        if (openElementsHasAPElementInButtonScope()) {
+                            closePElement()
+                        }
                         insertHtmlElement(token)
                     } else if (token is StartTagToken && listOf(
                             "h1",
@@ -335,13 +343,18 @@ class Parser(document: String) {
                             "h6"
                         ).contains(token.tagName)
                     ) {
-                        //                        if(openElementsHasAPElementInButtonScope()) {
-//                            closePElement()
-//                        }
+                        if (openElementsHasAPElementInButtonScope()) {
+                            closePElement()
+                        }
 
                         //TODO: if current node is another header, that's a parse error
                         insertHtmlElement(token)
-
+                    } else if (token is StartTagToken && token.tagName == "plaintext") {
+                        if (openElementsHasAPElementInButtonScope()) {
+                            closePElement()
+                        }
+                        insertHtmlElement(token)
+                        tokenizer.switchTo(TokenizationState.PLAINTEXTState)
                     } else if (token is EndTagToken && listOf(
                             "address",
                             "article",
@@ -443,7 +456,7 @@ class Parser(document: String) {
                 InsertionMode.afterBody -> {
                     if (token is CharacterToken && isWhitespace(token.data)) {
                         //TODO: same rules as in body
-                        //FIXME: reconstruct the active formatting elements
+                        reconstructTheActiveFormattingElements()
                         insertCharacter(token)
                     } else if (token is CommentToken) {
                         //Insert a comment as the last child of the first element in the stack of open elements (the html element).
@@ -472,7 +485,7 @@ class Parser(document: String) {
                         root.appendChild(comment)
                     } else if (token is CharacterToken && isWhitespace(token.data)) {
                         //TODO: same rules as in body
-                        //FIXME: reconstruct the active formatting elements
+                        reconstructTheActiveFormattingElements()
                         insertCharacter(token)
                     } else if (token is EndOfFileToken) {
                         //Stop parsing
@@ -489,6 +502,19 @@ class Parser(document: String) {
 
         println("Stopped parsing due to end of file, should probably be handled by some mode??")
         return root
+    }
+
+    private fun reconstructTheActiveFormattingElements() {
+        //FIXME: implement
+    }
+
+    private fun closePElement() {
+        TODO("Not yet implemented")
+    }
+
+    private fun openElementsHasAPElementInButtonScope(): Boolean {
+        //FIXME: implement check
+        return false
     }
 
     private fun changeEncoding(encoding: Encoding) {
