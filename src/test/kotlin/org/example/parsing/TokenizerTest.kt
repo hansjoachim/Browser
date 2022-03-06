@@ -361,8 +361,7 @@ class TokenizerTest {
             DOCTYPEToken("html"),
             StartTagToken("html"),
             StartTagToken("body"),
-            //FIXME: should include ampersand, but when we emit more than one character at a time, the are overwritten
-            // CharacterToken('&'),
+            CharacterToken('&'),
             CharacterToken('x'),
             CharacterToken('y'),
             CharacterToken('z'),

@@ -35,7 +35,7 @@ internal class Tokenizer(document: String) {
     //TODO: stringstream instead of bytes to skip conversion back and forth?
     private val inputStream: InputStream = ByteArrayInputStream(document.toByteArray(UTF_8))
     private var currentToken: Token? = null
-    private var emittedToken: Token? = null
+    private var emittedTokens = mutableListOf<Token>()
 
     private val parseErrors: MutableList<ParseError> = mutableListOf()
 
@@ -47,14 +47,8 @@ internal class Tokenizer(document: String) {
     private var characterReferenceCode = 0
 
     fun nextToken(): Token {
-        val emitted = tokenize()
-        emittedToken = null
-        return emitted
-    }
 
-    private fun tokenize(): Token {
-
-        while (emittedToken == null) {
+        while (emittedTokens.isEmpty()) {
             when (state) {
                 TokenizationState.DataState -> {
                     val consumedCharacter = consumeCharacter()
@@ -164,10 +158,10 @@ internal class Tokenizer(document: String) {
                     if (consumedCharacter.isAsciiAlpha()) {
                         currentToken = EndTagToken()
                         reconsumeIn(TokenizationState.TagNameState)
-                    } else if(consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
                         parseError("missing-end-tag-name", consumedCharacter)
                         switchTo(TokenizationState.DataState)
-                    } else if(consumedCharacter.isEndOfFile()) {
+                    } else if (consumedCharacter.isEndOfFile()) {
                         parseError("eof-before-tag-name", consumedCharacter)
                         emitACharacterToken(LESS_THAN_SIGN)
                         emitACharacterToken(SOLIDUS)
@@ -213,7 +207,6 @@ internal class Tokenizer(document: String) {
                         currentToken = EndTagToken()
                         reconsumeIn(TokenizationState.RCDATAEndTagNameState)
                     } else {
-                        //TODO Can I even emit more than one thing with the current setup?
                         emitACharacterToken(LESS_THAN_SIGN)
                         emitACharacterToken(SOLIDUS)
                         reconsumeIn(TokenizationState.RCDATAState)
@@ -263,7 +256,6 @@ internal class Tokenizer(document: String) {
                         currentToken = EndTagToken()
                         reconsumeIn(TokenizationState.RAWTEXTEndTagNameState)
                     } else {
-                        //FIXME: can I even emit more than one thing with the current setup?
                         emitACharacterToken(LESS_THAN_SIGN)
                         emitACharacterToken(SOLIDUS)
 
@@ -299,7 +291,6 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.ScriptDataEndTagOpenState)
                     } else if (consumedCharacter.matches(EXCLAMATION_MARK)) {
                         switchTo(TokenizationState.ScriptDataEscapeStartState)
-                        //FIXME: can I even emit more than one thing at a time with the current setup?
                         emitACharacterToken(LESS_THAN_SIGN)
                         emitACharacterToken(EXCLAMATION_MARK)
                     } else {
@@ -315,7 +306,6 @@ internal class Tokenizer(document: String) {
                         currentToken = EndTagToken()
                         reconsumeIn(TokenizationState.ScriptDataEndTagNameState)
                     } else {
-                        //FIXME: can I even emit more than one thing at a time with the current setup?
                         emitACharacterToken(LESS_THAN_SIGN)
                         emitACharacterToken(SOLIDUS)
                         reconsumeIn(TokenizationState.ScriptDataState)
@@ -1092,7 +1082,7 @@ internal class Tokenizer(document: String) {
             }
         }
 
-        return emittedToken as Token
+        return emittedTokens.removeFirst()
     }
 
     private fun checkCharacterReferenceCode() {
@@ -1178,21 +1168,23 @@ internal class Tokenizer(document: String) {
     private fun emitCurrentToken() {
         val local = currentToken!!
         currentToken = null
-        emittedToken = local
+        emit(local)
     }
 
     private fun emitEndOfFileToken() {
-        emittedToken = EndOfFileToken()
+        emit(EndOfFileToken())
     }
 
     private fun emitACharacterToken(character: Char) {
-        currentToken = CharacterToken(character)
-        emitCurrentToken()
+        emit(CharacterToken(character))
     }
 
     private fun emitAsACharacterToken(consumedCharacter: InputCharacter) {
-        currentToken = CharacterToken(consumedCharacter)
-        emitCurrentToken()
+        emit(CharacterToken(consumedCharacter))
+    }
+
+    private fun emit(token: Token) {
+        emittedTokens.add(token)
     }
 
     private fun consumeCharacters(string: String) {
@@ -1234,6 +1226,6 @@ internal class Tokenizer(document: String) {
     }
 
     internal fun reprocess(token: Token) {
-        emittedToken = token
+        emittedTokens.add(0, token)
     }
 }

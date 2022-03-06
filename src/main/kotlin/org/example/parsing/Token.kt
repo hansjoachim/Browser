@@ -1,9 +1,9 @@
 package org.example.parsing
 
-open class Token
+interface Token
 
 
-class DOCTYPEToken(var name: String= "missing") : Token() {
+class DOCTYPEToken(var name: String= "missing") : Token {
     var publicIdentifier: String = "missing"
     var systemIdentifier: String = "missing"
     var forceQuirks: String = "off"
@@ -67,7 +67,7 @@ open class TagToken(
     var tagName: String,
     var attributes: MutableList<Attribute> = mutableListOf(),
     var selfClosing: Boolean = false
-) : Token() {
+) : Token {
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -108,7 +108,7 @@ class EndTagToken(tagName: String = "") : TagToken(tagName) {
     }
 }
 
-class CommentToken(var data: String = "") : Token() {
+class CommentToken(var data: String = "") : Token {
     override fun toString(): String {
         return "CommentToken(data='$data')"
     }
@@ -129,7 +129,7 @@ class CommentToken(var data: String = "") : Token() {
     }
 }
 
-class CharacterToken(var data: Char) : Token() {
+class CharacterToken(var data: Char) : Token {
     constructor(inputCharacter: InputCharacter) :
             this(inputCharacter.character)
 
@@ -154,7 +154,7 @@ class CharacterToken(var data: Char) : Token() {
 
 }
 
-class EndOfFileToken : Token() {
+class EndOfFileToken : Token {
     override fun toString(): String {
         return "EndOfFileToken()"
     }

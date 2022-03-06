@@ -371,5 +371,4 @@ This tag can contain lots of fun stuff, and it never even ends
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
-//TODO: emit more than one thing to a list/stream?
 }
