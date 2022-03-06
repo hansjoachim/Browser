@@ -11,6 +11,7 @@ import java.lang.Character.isWhitespace
 
 class Parser(document: String) {
 
+    private val templateInsertionModes = mutableListOf<InsertionMode>()
     private val tokenizer = Tokenizer(document)
 
     private val scripting: Boolean = false
@@ -303,6 +304,37 @@ class Parser(document: String) {
                         } else {
                             unhandledMode(InsertionMode.inBody, token)
                         }
+                    } else if (token is EndOfFileToken) {
+                        if (templateInsertionModes.isNotEmpty()) {
+                            TODO("follow the rules for 'in template'")
+                        }
+                        //TODO: check stack for nodes, might be parse error
+
+                        if (stackOfOpenElementsHasANodeThatIsNotEither(
+                                "dd",
+                                "dt",
+                                "li",
+                                "optgroup",
+                                "option",
+                                "p",
+                                "rb",
+                                "rp",
+                                "rt",
+                                "rtc",
+                                "tbody",
+                                "td",
+                                "tfoot",
+                                "th",
+                                "thead",
+                                "tr",
+                                "body",
+                                "html"
+                            )
+                        ) {
+                            //TODO parse error
+                        }
+
+                        return stopParsing(root)
                     } else if (token is EndTagToken && token.tagName == "body") {
                         //Check stack and look for parse errors
                         switchTo(InsertionMode.afterBody)
@@ -475,8 +507,7 @@ class Parser(document: String) {
                         switchTo(InsertionMode.afterAfterBody)
                         //TODO: other cases
                     } else if (token is EndOfFileToken) {
-                        //stop parsing
-                        return root
+                        return stopParsing(root)
                     } else {
                         unhandledMode(InsertionMode.afterBody, token)
                     }
@@ -496,8 +527,7 @@ class Parser(document: String) {
                         reconstructTheActiveFormattingElements()
                         insertCharacter(token)
                     } else if (token is EndOfFileToken) {
-                        //Stop parsing
-                        return root
+                        return stopParsing(root)
                     } else {
                         unhandledMode(InsertionMode.afterAfterBody, token)
                     }
@@ -510,6 +540,30 @@ class Parser(document: String) {
 
         println("Stopped parsing due to end of file, should probably be handled by some mode??")
         return root
+    }
+
+    private fun stackOfOpenElementsHasANodeThatIsNotEither(vararg strings: String): Boolean {
+        val allowedElements = strings.asList()
+
+        return openElements.any { !allowedElements.contains(it.nodeName) }
+    }
+
+    private fun stopParsing(document: DocumentImpl): Document {
+        if (activeSpeculativeHtmlParser != null) {
+            TODO("stop the active speculative parser")
+        }
+        //set document readiness
+
+        while (openElements.isNotEmpty()) {
+            openElements.removeLast()
+        }
+
+        //Script things
+
+        //DOM task+++
+
+        //Set document status
+        return document
     }
 
     private fun handleScriptTagStartTag(startScript: StartTagToken) {
