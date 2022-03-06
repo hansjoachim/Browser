@@ -19,16 +19,24 @@ class BrowserWindow : JFrame("Browser") {
         val scrollableWrapper = JScrollPane(textArea)
 
         //TODO: insert a proper Go-button which does rendering
-        val debugButton = JButton("Debug")
-        debugButton.addActionListener {
+        val goButton = JButton("Go")
+        goButton.addActionListener {
             val address = addresseBar.text
             val response = network.getRequest(address)
             textArea.text = renderEngine.render(response)
             textArea.caretPosition = 0 // Scroll to top
         }
+        val debugButton = JButton("Debug")
+        debugButton.addActionListener {
+            val address = addresseBar.text
+            val response = network.getRequest(address)
+            textArea.text = renderEngine.debug(response)
+            textArea.caretPosition = 0 // Scroll to top
+        }
 
         val chrome = JPanel()
         chrome.add(addresseBar)
+        chrome.add(goButton)
         chrome.add(debugButton)
 
         val pane = this.contentPane

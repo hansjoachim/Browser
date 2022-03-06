@@ -28,11 +28,11 @@ class HTMLImageElementImpl : HTMLImageElement, HTMLElementImpl("img") {
     }
 
     override fun getAlt(): String {
-        TODO("Not yet implemented")
+        return getAttribute("alt")
     }
 
     override fun setAlt(alt: String?) {
-        TODO("Not yet implemented")
+        setAttribute("alt", alt)
     }
 
     override fun getBorder(): String {
