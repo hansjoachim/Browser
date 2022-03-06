@@ -271,6 +271,35 @@ function comparison(a, b)  {
     }
 
     @Test
+    fun should_parse_script_which_attempts_to_write_html_inside_comments() {
+        val simpleExample = """
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+<!--
+document.write("<p>hello world<p>");
+-->
+</script>
+</body>
+</html>
+"""
+        val document = Parser(simpleExample).parse()
+
+        val expectedDOM = """#document
+	html
+		head
+		body
+			#text
+			script
+				#text
+			#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    @Test
     fun should_parse_plaintext() {
         val simpleExample = """
 <!DOCTYPE html>

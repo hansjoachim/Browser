@@ -401,8 +401,20 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.ScriptDataEscapedLessThanSignState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataEscapedLessThanSignState, consumedCharacter)
+
+                    if (consumedCharacter.matches(SOLIDUS)) {
+                        temporaryBuffer = ""
+                        switchTo(TokenizationState.ScriptDataEscapedEndTagOpenState)
+                    } else if (consumedCharacter.isAsciiAlpha()) {
+                        temporaryBuffer = ""
+                        emitACharacterToken(LESS_THAN_SIGN)
+                        reconsumeIn(TokenizationState.ScriptDataDoubleEscapeStartState)
+                    } else {
+                        emitACharacterToken(LESS_THAN_SIGN)
+                        reconsumeIn(TokenizationState.ScriptDataEscapedState)
+                    }
                 }
                 TokenizationState.ScriptDataEscapedEndTagOpenState -> {
                     val consumedCharacter = consumeCharacter()
@@ -413,8 +425,29 @@ internal class Tokenizer(document: String) {
                     unhandledCase(TokenizationState.ScriptDataEscapedEndTagNameState, consumedCharacter)
                 }
                 TokenizationState.ScriptDataDoubleEscapeStartState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapeStartState, consumedCharacter)
+
+                    if (consumedCharacter.isWhitespace()
+                        || consumedCharacter.matches(SOLIDUS)
+                        || consumedCharacter.matches(GREATER_THAN_SIGN)
+                    ) {
+                        if (temporaryBuffer == "script") {
+                            switchTo(TokenizationState.ScriptDataDoubleEscapedState)
+                        } else {
+                            switchTo(TokenizationState.ScriptDataEscapedState)
+                        }
+                        emitAsACharacterToken(consumedCharacter)
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        val lowercaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
+                        temporaryBuffer += lowercaseVersionOfTheCurrentInputCharacter
+                        emitAsACharacterToken(consumedCharacter)
+                    } else if (consumedCharacter.isAsciiLowerAlpha()) {
+                        temporaryBuffer += consumedCharacter.character
+                        emitAsACharacterToken(consumedCharacter)
+                    } else {
+                        reconsumeIn(TokenizationState.ScriptDataEscapedState)
+                    }
                 }
                 TokenizationState.ScriptDataDoubleEscapedState -> {
                     val consumedCharacter = consumeCharacter()
