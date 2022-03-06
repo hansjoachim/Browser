@@ -8,8 +8,17 @@ import java.net.http.HttpResponse
 class NetworkFetcher(private val client: HttpClient) {
     constructor() : this(HttpClient.newBuilder().build())
 
-    fun getRequest(address:String): String {
-        val uri = URI(address)
+    companion object {
+        fun urlString(url: String): String {
+            if (url.contains("://")) {
+                return url
+            }
+            return "http://$url"
+        }
+    }
+
+    fun getRequest(address: String): String {
+        val uri = URI(urlString(address))
         val request = HttpRequest.newBuilder(uri)
             .GET()
             .build()

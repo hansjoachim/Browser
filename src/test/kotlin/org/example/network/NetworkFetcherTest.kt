@@ -49,6 +49,27 @@ class NetworkFetcherTest {
         verify(exactly = 2) { mockClient.send(any(), eq(HttpResponse.BodyHandlers.ofString())) }
     }
 
+    @Test
+    fun should_prepend_protocol_to_raw_domain() {
+        val url = NetworkFetcher.urlString("www.example.com")
+
+        assertThat(url).isEqualTo("http://www.example.com")
+    }
+
+    @Test
+    fun should_keep_existing_http_protocol() {
+        val url = NetworkFetcher.urlString("http://www.example.com")
+
+        assertThat(url).isEqualTo("http://www.example.com")
+    }
+
+    @Test
+    fun should_keep_existing_https_protocol() {
+        val url = NetworkFetcher.urlString("https://www.example.com")
+
+        assertThat(url).isEqualTo("https://www.example.com")
+    }
+
     private fun mockHttpResponse(
         statusCode: Int = 200,
         body: String,
