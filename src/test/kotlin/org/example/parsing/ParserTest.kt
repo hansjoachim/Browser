@@ -229,7 +229,6 @@ class ParserTest {
         assertThat(tree).isEqualTo(expectedDOM)
     }
 
-    //FIXME: expand with script tags in body
     @Test
     fun should_parse_script() {
         val simpleExample = """
@@ -243,6 +242,11 @@ function comparison(a, b)  {
 </script>
 </head>
 <body>
+<script>/*Javascript comment. And it can even include <!-- ignored html comments --> */
+function comparison(a, b)  {
+    return a < b
+}
+</script>
 </body>
 </html>
 """
@@ -257,6 +261,9 @@ function comparison(a, b)  {
 			#text
 		#text
 		body
+			#text
+			script
+				#text
 			#text
 """
         val tree = DOMDebugger.getDOMTree(document)

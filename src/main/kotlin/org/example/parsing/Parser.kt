@@ -183,21 +183,7 @@ class Parser(document: String) {
                         insertHtmlElement(token)
                         switchTo(InsertionMode.inHeadNoscript)
                     } else if (token is StartTagToken && token.tagName == "script") {
-                        val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()
-
-                        val element = createElementFrom(token)
-
-                        //Set the element's parser document to the Document, and unset the element's "non-blocking" flag.
-                        // But how??
-
-                        //TODO: handle other script cases
-
-                        adjustedInsertionLocation.appendChild(element)
-                        openElements.addLast(element)
-
-                        tokenizer.switchTo(TokenizationState.ScriptDataState)
-                        originalInsertionMode = currentInsertionMode
-                        switchTo(InsertionMode.text)
+                        handleScriptTagStartTag(token)
                     } else if (token is EndTagToken && token.tagName == "head") {
                         openElements.removeLast()
                         switchTo(InsertionMode.afterHead)
@@ -295,6 +281,28 @@ class Parser(document: String) {
                     } else if (token is DOCTYPEToken) {
                         //TODO parseError without comment/type in spec
                         //Ignore
+                    } else if (token is StartTagToken && listOf(
+                            "base",
+                            "basefont",
+                            "bgsound",
+                            "link",
+                            "meta",
+                            "noframes",
+                            "script",
+                            "style",
+                            "template",
+                            "title"
+                        ).contains(token.tagName)
+                    ) {
+                        //Like in head, but separate cases
+
+                        if (listOf("noframes", "style").contains(token.tagName)) {
+                            genericRawTextElementParsing(token)
+                        } else if (token.tagName == "script") {
+                            handleScriptTagStartTag(token)
+                        } else {
+                            unhandledMode(InsertionMode.inBody, token)
+                        }
                     } else if (token is EndTagToken && token.tagName == "body") {
                         //Check stack and look for parse errors
                         switchTo(InsertionMode.afterBody)
@@ -502,6 +510,24 @@ class Parser(document: String) {
 
         println("Stopped parsing due to end of file, should probably be handled by some mode??")
         return root
+    }
+
+    private fun handleScriptTagStartTag(startScript: StartTagToken) {
+        val adjustedInsertionLocation = findAppropriatePlaceForInsertingANode()
+
+        val element = createElementFrom(startScript)
+
+        //Set the element's parser document to the Document, and unset the element's "non-blocking" flag.
+        // But how??
+
+        //TODO: handle other script cases
+
+        adjustedInsertionLocation.appendChild(element)
+        openElements.addLast(element)
+
+        tokenizer.switchTo(TokenizationState.ScriptDataState)
+        originalInsertionMode = currentInsertionMode
+        switchTo(InsertionMode.text)
     }
 
     private fun reconstructTheActiveFormattingElements() {
