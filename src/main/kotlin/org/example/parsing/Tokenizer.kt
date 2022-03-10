@@ -421,7 +421,6 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.ScriptDataEscapedDashState -> {
-                    //FIXME: all cases above are handled, move on further down from here
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.matches(HYPHEN_MINUS)) {
@@ -429,9 +428,12 @@ internal class Tokenizer(document: String) {
                         emitACharacterToken(HYPHEN_MINUS)
                     } else if (consumedCharacter.matches(LESS_THAN_SIGN)) {
                         switchTo(TokenizationState.ScriptDataEscapedLessThanSignState)
-                        //TODO: if null
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        switchTo(TokenizationState.ScriptDataEscapedState)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
                     } else if (consumedCharacter.isEndOfFile()) {
-                        // This is an eof-in-script-html-comment-like-text parse error.
+                        parseError("eof-in-script-html-comment-like-text", consumedCharacter)
                         emitEndOfFileToken()
                     } else {
                         switchTo(TokenizationState.ScriptDataEscapedState)
@@ -448,9 +450,13 @@ internal class Tokenizer(document: String) {
                     } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
                         switchTo(TokenizationState.ScriptDataState)
                         emitACharacterToken(GREATER_THAN_SIGN)
-                        //TODO: if null
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        switchTo(TokenizationState.ScriptDataEscapedState)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
+
                     } else if (consumedCharacter.isEndOfFile()) {
-                        // This is an eof-in-script-html-comment-like-text parse error.
+                        parseError("eof-in-script-html-comment-like-text", consumedCharacter)
                         emitEndOfFileToken()
                     } else {
                         switchTo(TokenizationState.ScriptDataEscapedState)
@@ -474,12 +480,54 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.ScriptDataEscapedEndTagOpenState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataEscapedEndTagOpenState, consumedCharacter)
+
+                    if (consumedCharacter.isAsciiAlpha()) {
+                        currentToken = EndTagToken()
+                        reconsumeIn(TokenizationState.ScriptDataEscapedEndTagNameState)
+                    } else {
+                        emitACharacterToken(LESS_THAN_SIGN)
+                        emitACharacterToken(SOLIDUS)
+
+                        reconsumeIn(TokenizationState.ScriptDataEscapedState)
+                    }
                 }
                 TokenizationState.ScriptDataEscapedEndTagNameState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataEscapedEndTagNameState, consumedCharacter)
+
+                    if (consumedCharacter.isWhitespace()) {
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.BeforeAttributeNameState)
+                        } else {
+                            ScriptDataEscapedEndTagNameStateAnythingElse()
+                        }
+                    } else if (consumedCharacter.matches(SOLIDUS)) {
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.SelfClosingStartTagState)
+                        } else {
+                            ScriptDataEscapedEndTagNameStateAnythingElse()
+                        }
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        if (isAnAppropriateEndTagToken(currentToken as EndTagToken)) {
+                            switchTo(TokenizationState.DataState)
+                            emitCurrentToken()
+                        } else {
+                            ScriptDataEscapedEndTagNameStateAnythingElse()
+                        }
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        val lowercaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
+                        (currentToken as TagToken).tagName += lowercaseVersionOfTheCurrentInputCharacter
+
+                        temporaryBuffer += consumedCharacter.character
+                    } else if (consumedCharacter.isAsciiLowerAlpha()) {
+                        (currentToken as TagToken).tagName += consumedCharacter.character
+
+                        temporaryBuffer += consumedCharacter.character
+                    } else {
+                        ScriptDataEscapedEndTagNameStateAnythingElse()
+                    }
                 }
                 TokenizationState.ScriptDataDoubleEscapeStartState -> {
                     inputStream.mark(1)
@@ -508,23 +556,103 @@ internal class Tokenizer(document: String) {
                 }
                 TokenizationState.ScriptDataDoubleEscapedState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedState, consumedCharacter)
+
+                    if (consumedCharacter.matches(HYPHEN_MINUS)) {
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedDashState)
+                        emitACharacterToken(HYPHEN_MINUS)
+                    } else if (consumedCharacter.matches(LESS_THAN_SIGN)) {
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedLessThanSignState)
+                        emitACharacterToken(LESS_THAN_SIGN)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-script-html-comment-like-text", consumedCharacter)
+                        emitEndOfFileToken()
+                    } else {
+                        emitAsACharacterToken(consumedCharacter)
+                    }
                 }
                 TokenizationState.ScriptDataDoubleEscapedDashState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedDashState, consumedCharacter)
+
+                    if (consumedCharacter.matches(HYPHEN_MINUS)) {
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedDashDashState)
+                        emitACharacterToken(HYPHEN_MINUS)
+                    } else if (consumedCharacter.matches(LESS_THAN_SIGN)) {
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedLessThanSignState)
+                        emitACharacterToken(LESS_THAN_SIGN)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedState)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-script-html-comment-like-text", consumedCharacter)
+                        emitEndOfFileToken()
+                    } else {
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedState)
+                        emitAsACharacterToken(consumedCharacter)
+                    }
                 }
                 TokenizationState.ScriptDataDoubleEscapedDashDashState -> {
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedDashDashState, consumedCharacter)
+
+                    if (consumedCharacter.matches(HYPHEN_MINUS)) {
+                        emitACharacterToken(HYPHEN_MINUS)
+                    } else if (consumedCharacter.matches(LESS_THAN_SIGN)) {
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedLessThanSignState)
+                        emitACharacterToken(LESS_THAN_SIGN)
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        switchTo(TokenizationState.ScriptDataState)
+                        emitACharacterToken(GREATER_THAN_SIGN)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedState)
+                        emitACharacterToken(REPLACEMENT_CHARACTER)
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-script-html-comment-like-text", consumedCharacter)
+                        emitEndOfFileToken()
+                    } else {
+                        switchTo(TokenizationState.ScriptDataDoubleEscapedState)
+                        emitAsACharacterToken(consumedCharacter)
+                    }
                 }
                 TokenizationState.ScriptDataDoubleEscapedLessThanSignState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapedLessThanSignState, consumedCharacter)
+
+                    if (consumedCharacter.matches(SOLIDUS)) {
+                        temporaryBuffer = ""
+                        switchTo(TokenizationState.ScriptDataDoubleEscapeEndState)
+                        emitACharacterToken(SOLIDUS)
+                    } else {
+                        reconsumeIn(TokenizationState.ScriptDataDoubleEscapedState)
+                    }
                 }
                 TokenizationState.ScriptDataDoubleEscapeEndState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.ScriptDataDoubleEscapeEndState, consumedCharacter)
+
+                    if (consumedCharacter.isWhitespace()
+                        || consumedCharacter.matches(SOLIDUS)
+                        || consumedCharacter.matches(GREATER_THAN_SIGN)
+                    ) {
+                        if (temporaryBuffer == "script") {
+                            switchTo(TokenizationState.ScriptDataEscapedState)
+                        } else {
+                            switchTo(TokenizationState.ScriptDataDoubleEscapedState)
+                        }
+                        emitAsACharacterToken(consumedCharacter)
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        val lowercaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
+                        temporaryBuffer += lowercaseVersionOfTheCurrentInputCharacter
+                        emitAsACharacterToken(consumedCharacter)
+                    } else if (consumedCharacter.isAsciiLowerAlpha()) {
+                        temporaryBuffer += consumedCharacter.character
+                        emitAsACharacterToken(consumedCharacter)
+                    } else {
+                        reconsumeIn(TokenizationState.ScriptDataDoubleEscapedState)
+                    }
                 }
                 TokenizationState.BeforeAttributeNameState -> {
                     inputStream.mark(1)
@@ -532,8 +660,16 @@ internal class Tokenizer(document: String) {
 
                     if (consumedCharacter.isWhitespace()) {
                         //ignore
-                    } else if (consumedCharacter.matches(SOLIDUS) || consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                    } else if (consumedCharacter.matches(SOLIDUS)
+                        || consumedCharacter.matches(GREATER_THAN_SIGN)
+                        || consumedCharacter.isEndOfFile()
+                    ) {
                         reconsumeIn(TokenizationState.AfterAttributeNameState)
+                    } else if (consumedCharacter.matches(EQUALS_SIGN)) {
+                        parseError("unexpected-equals-sign-before-attribute-name", consumedCharacter)
+                        (currentToken as TagToken).attributes.add(Attribute(attributeName = consumedCharacter.character.toString()))
+
+                        switchTo(TokenizationState.AttributeNameState)
                     } else {
                         (currentToken as TagToken).attributes.add(Attribute())
                         reconsumeIn(TokenizationState.AttributeNameState)
@@ -546,13 +682,27 @@ internal class Tokenizer(document: String) {
                     if (consumedCharacter.isWhitespace()
                         || consumedCharacter.matches(SOLIDUS)
                         || consumedCharacter.matches(GREATER_THAN_SIGN)
+                        || consumedCharacter.isEndOfFile()
                     ) {
                         reconsumeIn(TokenizationState.AfterAttributeNameState)
                     } else if (consumedCharacter.matches(EQUALS_SIGN)) {
                         switchTo(TokenizationState.BeforeAttributeValueState)
-                    } else {
+                    } else if (consumedCharacter.isAsciiUpperAlpha()) {
+                        val lowercaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
                         val currentAttribute = (currentToken as TagToken).attributes.last()
-                        currentAttribute.attributeName += consumedCharacter.character
+                        currentAttribute.attributeName += lowercaseVersionOfTheCurrentInputCharacter
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        val currentAttribute = (currentToken as TagToken).attributes.last()
+                        currentAttribute.attributeName += REPLACEMENT_CHARACTER
+                    } else if (consumedCharacter.matches(QUOTATION_MARK)
+                        || consumedCharacter.matches(APOSTROPHE)
+                        || consumedCharacter.matches(LESS_THAN_SIGN)
+                    ) {
+                        parseError("unexpected-character-in-attribute-name", consumedCharacter)
+                        AttributeNameStateAnythingElse(consumedCharacter)
+                    } else {
+                        AttributeNameStateAnythingElse(consumedCharacter)
                     }
                 }
                 TokenizationState.AfterAttributeNameState -> {
@@ -568,13 +718,16 @@ internal class Tokenizer(document: String) {
                     } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
-                        //TODO: EOF case
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-tag", consumedCharacter)
+                        emitEndOfFileToken()
                     } else {
-                        //FIXME: Start a new attribute in the current tag token. Set that attribute name and value to the empty string.
+                        (currentToken as TagToken).attributes.add(Attribute())
                         reconsumeIn(TokenizationState.AttributeNameState)
                     }
                 }
                 TokenizationState.BeforeAttributeValueState -> {
+                    //FIXME: all cases above are handled, move on further down from here
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
@@ -1175,6 +1328,19 @@ internal class Tokenizer(document: String) {
         return emittedTokens.removeFirst()
     }
 
+    private fun AttributeNameStateAnythingElse(consumedCharacter: InputCharacter) {
+        val currentAttribute = (currentToken as TagToken).attributes.last()
+        currentAttribute.attributeName += consumedCharacter.character
+    }
+
+    private fun ScriptDataEscapedEndTagNameStateAnythingElse() {
+        emitACharacterToken(LESS_THAN_SIGN)
+        emitACharacterToken(SOLIDUS)
+        temporaryBuffer.toCharArray().forEach { emitACharacterToken(it) }
+
+        reconsumeIn(TokenizationState.ScriptDataEscapedState)
+    }
+
     private fun ScriptDataEndTagNameStateAnythingElse() {
         emitACharacterToken(LESS_THAN_SIGN)
         emitACharacterToken(SOLIDUS)
@@ -1250,6 +1416,8 @@ internal class Tokenizer(document: String) {
 
     private fun flushCodePointsConsumedAsACharacterReference() {
         //FIXME: should deal with attributes, or else
+
+        println("Flushing code points as character reference for $temporaryBuffer . Should this have been handled earlier?")
         temporaryBuffer.toCharArray().map { emitACharacterToken(it) }
     }
 
@@ -1265,6 +1433,10 @@ internal class Tokenizer(document: String) {
     }
 
     internal fun switchTo(state: TokenizationState) {
+        if (this.state == TokenizationState.AttributeNameState) {
+            //FIXME: check attributes, might be a parse error
+        }
+
         this.state = state
     }
 
