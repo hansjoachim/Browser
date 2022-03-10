@@ -1211,7 +1211,10 @@ internal class Tokenizer(document: String) {
                         //FIXME: deal with attributes
 
                         temporaryBuffer = ""
-                        temporaryBuffer += Char(possibleMatch.character)
+                        possibleMatch.codepoints.forEach {
+                            temporaryBuffer += Char(it)
+                        }
+
                         flushCodePointsConsumedAsACharacterReference()
                         switchTo(returnState as TokenizationState)
                     } else {
@@ -1387,22 +1390,22 @@ internal class Tokenizer(document: String) {
         }
     }
 
-    private fun matchInCharacterReferenceTable(): NamedCharacterReference? {
+    private fun matchInCharacterReferenceTable(): NamedChararcterReference? {
         var index = 0
-        var filteredList = NamedCharacterReference.values().toMutableList()
+        var filteredList = NamedChararcterReferenceContainer().namedCharacters.toMutableList()
 
         while (true) {
             val consumedCharacter = consumeCharacter()
             temporaryBuffer += consumedCharacter.character
 
             filteredList = filteredList
-                .filter { it.referenceName.length > index }
-                .filter { it.referenceName[index] == consumedCharacter.character } as MutableList<NamedCharacterReference>
+                .filter { it.matchableName().length > index }
+                .filter { it.matchableName()[index] == consumedCharacter.character } as MutableList<NamedChararcterReference>
 
             if (filteredList.isEmpty()) {
                 return null
             } else if (filteredList.size == 1) {
-                val referenceNameLength = filteredList.first().referenceName.length
+                val referenceNameLength = filteredList.first().matchableName().length
                 val charactersRead = index + 1
                 val hasMatchedCompleteName = referenceNameLength == charactersRead
                 if (hasMatchedCompleteName) {

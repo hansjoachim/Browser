@@ -1,9 +1,21 @@
 package org.example.parsing
 
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.*
 
-enum class NamedCharacterReference(val referenceName: String, val character: Int, val glyph: Char) {
-    NBSP_SEMICOLON("nbsp;", Tokenizer.NBSP_CODE, Tokenizer.NBSP),
-    NBSP("nbsp", Tokenizer.NBSP_CODE, Tokenizer.NBSP)
+@kotlinx.serialization.Serializable
+data class NamedChararcterReference(val name: String, val codepoints: List<Int>, val characters: String) {
+    /** Skips the first character which is always ampersand (&) when comparing */
+    fun matchableName(): String {
+        return name.substring(1)
+    }
+}
 
-    //TODO : the rest of the table, including multiple characters in second column
+class NamedChararcterReferenceContainer {
+    val namedCharacters: List<NamedChararcterReference>
+
+    init {
+        val rawJSONtable = NamedChararcterReferenceContainer::class.java.getResource("/entities.json").readText()
+        namedCharacters = Json.decodeFromString(rawJSONtable)
+    }
 }
