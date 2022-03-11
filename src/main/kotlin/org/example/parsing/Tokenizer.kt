@@ -35,6 +35,7 @@ internal class Tokenizer(document: String) {
     //TODO: stringstream instead of bytes to skip conversion back and forth?
     private val inputStream: InputStream = ByteArrayInputStream(document.toByteArray(UTF_8))
     private var currentToken: Token? = null
+    private var currentAttribute: Attribute? = null
     private var emittedTokens = mutableListOf<Token>()
     private var lastEmittedStartTagToken: StartTagToken? = null
 
@@ -667,11 +668,14 @@ internal class Tokenizer(document: String) {
                         reconsumeIn(TokenizationState.AfterAttributeNameState)
                     } else if (consumedCharacter.matches(EQUALS_SIGN)) {
                         parseError("unexpected-equals-sign-before-attribute-name", consumedCharacter)
-                        (currentToken as TagToken).attributes.add(Attribute(attributeName = consumedCharacter.character.toString()))
+                        startANewAttributeIn(
+                            (currentToken as TagToken),
+                            attributeName = consumedCharacter.character.toString()
+                        )
 
                         switchTo(TokenizationState.AttributeNameState)
                     } else {
-                        (currentToken as TagToken).attributes.add(Attribute())
+                        startANewAttributeIn((currentToken as TagToken))
                         reconsumeIn(TokenizationState.AttributeNameState)
                     }
                 }
@@ -689,12 +693,10 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.BeforeAttributeValueState)
                     } else if (consumedCharacter.isAsciiUpperAlpha()) {
                         val lowercaseVersionOfTheCurrentInputCharacter = consumedCharacter.character + 0x0020
-                        val currentAttribute = (currentToken as TagToken).attributes.last()
-                        currentAttribute.attributeName += lowercaseVersionOfTheCurrentInputCharacter
+                        (currentAttribute as Attribute).attributeName += lowercaseVersionOfTheCurrentInputCharacter
                     } else if (consumedCharacter.matches(NULL_CHARACTER)) {
                         parseError("unexpected-null-character", consumedCharacter)
-                        val currentAttribute = (currentToken as TagToken).attributes.last()
-                        currentAttribute.attributeName += REPLACEMENT_CHARACTER
+                        (currentAttribute as Attribute).attributeName += REPLACEMENT_CHARACTER
                     } else if (consumedCharacter.matches(QUOTATION_MARK)
                         || consumedCharacter.matches(APOSTROPHE)
                         || consumedCharacter.matches(LESS_THAN_SIGN)
@@ -722,7 +724,7 @@ internal class Tokenizer(document: String) {
                         parseError("eof-in-tag", consumedCharacter)
                         emitEndOfFileToken()
                     } else {
-                        (currentToken as TagToken).attributes.add(Attribute())
+                        startANewAttributeIn((currentToken as TagToken))
                         reconsumeIn(TokenizationState.AttributeNameState)
                     }
                 }
@@ -752,8 +754,7 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.AfterAttributeValueQuotedState)
                         //TODO: more cases
                     } else {
-                        val currentAttribute = (currentToken as TagToken).attributes.last()
-                        currentAttribute.value += consumedCharacter.character
+                        (currentAttribute as Attribute).value += consumedCharacter.character
                     }
                 }
                 TokenizationState.AttributeValueSingleQuotedState -> {
@@ -763,8 +764,7 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.AfterAttributeValueQuotedState)
                         //TODO: more cases
                     } else {
-                        val currentAtribute = (currentToken as TagToken).attributes.last()
-                        currentAtribute.value += consumedCharacter.character
+                        (currentAttribute as Attribute).value += consumedCharacter.character
                     }
                 }
                 TokenizationState.AttributeValueUnquotedState -> {
@@ -776,8 +776,7 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
                     } else {
-                        val currentAttribute = (currentToken as TagToken).attributes.last()
-                        currentAttribute.value += consumedCharacter.character
+                        (currentAttribute as Attribute).value += consumedCharacter.character
                     }
                 }
                 TokenizationState.AfterAttributeValueQuotedState -> {
@@ -1331,9 +1330,13 @@ internal class Tokenizer(document: String) {
         return emittedTokens.removeFirst()
     }
 
+    private fun startANewAttributeIn(tagToken: TagToken, attributeName: String = "", value: String = "") {
+        currentAttribute = Attribute(attributeName, value)
+        tagToken.attributes.add(currentAttribute as Attribute)
+    }
+
     private fun AttributeNameStateAnythingElse(consumedCharacter: InputCharacter) {
-        val currentAttribute = (currentToken as TagToken).attributes.last()
-        currentAttribute.attributeName += consumedCharacter.character
+        (currentAttribute as Attribute).attributeName += consumedCharacter.character
     }
 
     private fun ScriptDataEscapedEndTagNameStateAnythingElse() {
@@ -1437,7 +1440,16 @@ internal class Tokenizer(document: String) {
 
     internal fun switchTo(state: TokenizationState) {
         if (this.state == TokenizationState.AttributeNameState) {
-            //FIXME: check attributes, might be a parse error
+            val latestAttribute = (currentToken as TagToken).attributes.last()
+            val matchingNames = (currentToken as TagToken).attributes
+                .filter { it.attributeName == latestAttribute.attributeName }
+                .count()
+
+            if (matchingNames > 1) {
+                parseError("duplicate-attribute")
+                (currentToken as TagToken).attributes.removeLast()
+                // Note: currentAttribute still points to the now orphaned attribute, and any value read will be consumed but ignored
+            }
         }
 
         this.state = state

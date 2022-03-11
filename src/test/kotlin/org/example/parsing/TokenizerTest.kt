@@ -185,6 +185,31 @@ class TokenizerTest {
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
 
+
+    @Test
+    fun should_tokenize_tags_with_duplicate_attributes() {
+        val simpleExample = "<!DOCTYPE html><html><body a=1 b=2 a=3></body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = allTokens(tokenizer)
+
+        val expectedTokens = listOf(
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken(
+                "body", mutableListOf(
+                    Attribute("a", "1"),
+                    Attribute("b", "2"),
+                )
+            ),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
     @Test
     fun should_tokenize_tags_with_squashed_attributes() {
         val simpleExample = "<!DOCTYPE html><html><body id='test'class='some class'></body></html>"
