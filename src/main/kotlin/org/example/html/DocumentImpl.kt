@@ -2,7 +2,7 @@ package org.example.html
 
 import org.w3c.dom.*
 
-class DocumentImpl() : Document, NodeImpl(
+class DocumentImpl(val parserCannotChangeTheMode: Boolean = false) : Document, NodeImpl(
     nodeName = "#document"
 ) {
     //FIXME: should not exist when Document is created. Though then I need to deal with nullable fields :(

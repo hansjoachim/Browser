@@ -1,6 +1,7 @@
 package org.example.parsing
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.Ignore
 import org.junit.Test
 
 class TokenizerTest {
@@ -255,6 +256,36 @@ class TokenizerTest {
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
 
+   @Ignore("FIXME: should check whether ampersands appear in attribute context")
+    @Test
+    fun should_tokenize_tags_with_ampersand_in_attributes() {
+        val simpleExample = "<!DOCTYPE html><html><head><link href='/static/main.css?flag=true&hash=deadbeef' rel='stylesheet'></head><body/></html>"
+
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = allTokens(tokenizer)
+
+        val expectedTokens = listOf(
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("head"),
+            StartTagToken(
+                "link", mutableListOf(
+                    Attribute("href", "/static/main.css?flag=true&hash=deadbeef"),
+                    Attribute("rel", "stylesheet"),
+                )
+            ),
+            EndTagToken("head"),
+            StartTagToken(
+                "body", selfClosing = true
+            ),
+            EndTagToken("html"),
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
     @Test
     fun should_tokenize_tags_with_numbers_in_names() {
         val simpleExample = "<!DOCTYPE html><html><h1>My title</h1></html>"
@@ -418,10 +449,6 @@ class TokenizerTest {
 
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
-
-    //TODO: more namedCharacterReferences...
-    //TOOD: mark parse errors, update usage of temporary buffer now that it exists
-    //TODO: CDATA
 
     /**
      * Only works when testing simple cases.

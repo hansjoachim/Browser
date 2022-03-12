@@ -36,7 +36,7 @@ class Parser(document: String) {
             val token = tokenizer.nextToken()
             when (currentInsertionMode) {
                 InsertionMode.initial -> {
-                    if (token is CharacterToken && isWhitespace(token.data)) {
+                    if (token is CharacterToken && token.isWhitespace()) {
                         //ignore
                     } else if (token is CommentToken) {
                         val comment = CommentImpl(token.data)
@@ -62,14 +62,15 @@ class Parser(document: String) {
                 }
                 InsertionMode.beforeHtml -> {
                     if (token is DOCTYPEToken) {
-                        unhandledMode(InsertionMode.beforeHtml, token)
+                        parseError(InsertionMode.beforeHtml, token)
+                        //Ignore
                     } else if (token is CommentToken) {
                         val comment = CommentImpl(token.data)
                         root.appendChild(comment)
-                    } else if (token is CharacterToken && isWhitespace(token.data)) {
+                    } else if (token is CharacterToken && token.isWhitespace()) {
                         //ignore
                     } else if (token is StartTagToken && token.tagName == "html") {
-                        val element = createElementFrom(token)
+                        val element = createElementFrom(token, intendedParent = root)
                         root.appendChild(element)
                         openElements.addLast(element)
                         switchTo(InsertionMode.beforeHead)
@@ -80,24 +81,24 @@ class Parser(document: String) {
                             "br"
                         ).contains(token.tagName)
                     ) {
-                        unhandledMode(InsertionMode.beforeHtml, token)
+                        BeforeHTMLAnythingElse(root, token)
                     } else if (token is EndTagToken) {
-                        unhandledMode(InsertionMode.beforeHtml, token)
+                        parseError(InsertionMode.beforeHtml, token)
+                        //Ignore
                     } else {
-                        val element = createElementFromTagName("html")
-                        root.appendChild(element)
-                        openElements.addLast(element)
-                        switchTo(InsertionMode.beforeHead)
+                        BeforeHTMLAnythingElse(root, token)
                     }
                 }
                 InsertionMode.beforeHead -> {
-                    if (token is CharacterToken && isWhitespace(token.data)) {
+                    if (token is CharacterToken && token.isWhitespace()) {
                         //ignore
                     } else if (token is CommentToken) {
                         insertComment(token)
                     } else if (token is DOCTYPEToken) {
-                        unhandledMode(InsertionMode.beforeHead, token)
+                        parseError(InsertionMode.beforeHead, token)
+                        //Ignore
                     } else if (token is StartTagToken && token.tagName == "html") {
+                        //FIXME: like in body
                         unhandledMode(InsertionMode.beforeHead, token)
                     } else if (token is StartTagToken && token.tagName == "head") {
                         val head = insertHtmlElement(token)
@@ -111,28 +112,27 @@ class Parser(document: String) {
                             "br"
                         ).contains(token.tagName)
                     ) {
-                        unhandledMode(InsertionMode.beforeHead, token)
+                        BeforeHeadAnythingElse(token)
                     } else if (token is EndTagToken) {
-                        unhandledMode(InsertionMode.beforeHead, token)
+                        parseError(InsertionMode.beforeHead, token)
+                        //Ignore
                     } else {
-                        val fakeHead = StartTagToken("head")
-                        val head = insertHtmlElement(fakeHead)
-
-                        headElementPointer = head
-                        switchTo(InsertionMode.inHead)
-
-                        reprocessCurrentToken(token)
+                        BeforeHeadAnythingElse(token)
                     }
                 }
                 InsertionMode.inHead -> {
                     //TODO : lots of if cases
 
-                    if (token is CharacterToken && isWhitespace((token.data))) {
+                    if (token is CharacterToken && token.isWhitespace()) {
                         insertCharacter(token)
                     } else if (token is CommentToken) {
                         insertComment(token)
                     } else if (token is DOCTYPEToken) {
-                        //Parse error. Ignore
+                        parseError(InsertionMode.inHead, token)
+                        //Ignore
+                    } else if (token is StartTagToken && token.tagName == "html") {
+                        //FIXME: like in body
+                        unhandledMode(InsertionMode.inHead, token)
                     } else if (token is StartTagToken && listOf(
                             "base",
                             "basefont",
@@ -143,7 +143,7 @@ class Parser(document: String) {
                         insertHtmlElement(token)
                         openElements.removeLast()
 
-                        //Acknowledge the token's self-closing flag, if it is set.
+                        //FIXME Acknowledge the token's self-closing flag, if it is set.
                     } else if (token is StartTagToken && token.tagName == "meta") {
                         val element = insertHtmlElement(token)
                         openElements.removeLast()
@@ -188,6 +188,10 @@ class Parser(document: String) {
                     } else if (token is EndTagToken && token.tagName == "head") {
                         openElements.removeLast()
                         switchTo(InsertionMode.afterHead)
+                    } else if ((token is StartTagToken && token.tagName=="head")
+                        || token is EndTagToken){
+                        parseError(InsertionMode.inHead, token)
+                        //Ignore
                     } else {
                         //Pop the current node (which will be the head element) off the stack of open elements.
                         openElements.removeLast()
@@ -250,10 +254,16 @@ class Parser(document: String) {
                     }
                 }
                 InsertionMode.afterHead -> {
-                    if (token is CharacterToken && isWhitespace(token.data)) {
+                    if (token is CharacterToken && token.isWhitespace()) {
                         insertCharacter(token)
                     } else if (token is CommentToken) {
                         insertComment(token)
+                    } else if (token is DOCTYPEToken) {
+                        parseError(InsertionMode.afterHead, token)
+                        //Ignore
+                    } else if (token is StartTagToken && token.tagName == "html") {
+                        //FIXME: like in body
+                        unhandledMode(InsertionMode.beforeHead, token)
                     } else if (token is StartTagToken && token.tagName == "body") {
                         insertHtmlElement(token)
                         //Set the Document's awaiting parser-inserted body flag to false.
@@ -261,6 +271,10 @@ class Parser(document: String) {
                         framsetOk = false
                         switchTo(InsertionMode.inBody)
                         //TODO: other cases
+                    } else if ((token is StartTagToken && token.tagName=="head")
+                        || token is EndTagToken){
+                        parseError(InsertionMode.afterHead, token)
+                        //Ignore
                     } else {
                         unhandledMode(InsertionMode.afterHead, token)
                     }
@@ -542,6 +556,30 @@ class Parser(document: String) {
         return root
     }
 
+    private fun BeforeHeadAnythingElse(token: Token) {
+        val fakeHead = StartTagToken("head")
+        val head = insertHtmlElement(fakeHead)
+
+        headElementPointer = head
+        switchTo(InsertionMode.inHead)
+
+        reprocessCurrentToken(token)
+    }
+
+    private fun BeforeHTMLAnythingElse(document: DocumentImpl, token: Token) {
+        // FIXME: Create an html element whose node document is the Document object.
+        val element = createElementFromTagName("html")
+        document.appendChild(element)
+        openElements.addLast(element)
+
+        switchTo(InsertionMode.beforeHead)
+        reprocessCurrentToken(token)
+    }
+
+    private fun parseError(mode: InsertionMode, token: Token) {
+        println("Parse error in $mode , encountered $token")
+    }
+
     private fun stackOfOpenElementsHasANodeThatIsNotEither(vararg strings: String): Boolean {
         val allowedElements = strings.asList()
 
@@ -665,7 +703,8 @@ class Parser(document: String) {
         return element
     }
 
-    private fun createElementFrom(token: StartTagToken): HTMLElement {
+    private fun createElementFrom(token: StartTagToken, intendedParent: DocumentImpl? = null): HTMLElement {
+        //FIXME: mark parent element in the created element
         val element = createElementFromTagName(token.tagName)
 
         //TODO: handle attribute changes

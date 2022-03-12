@@ -3,7 +3,7 @@ package org.example.parsing
 interface Token
 
 
-class DOCTYPEToken(var name: String= "missing") : Token {
+class DOCTYPEToken(var name: String = "missing") : Token {
     var publicIdentifier: String = "missing"
     var systemIdentifier: String = "missing"
     var forceQuirks: String = "off"
@@ -129,7 +129,7 @@ class CommentToken(var data: String = "") : Token {
     }
 }
 
-class CharacterToken(var data: Char) : Token {
+class CharacterToken(val data: Char) : Token {
     constructor(inputCharacter: InputCharacter) :
             this(inputCharacter.character)
 
@@ -150,6 +150,18 @@ class CharacterToken(var data: Char) : Token {
 
     override fun hashCode(): Int {
         return data.hashCode()
+    }
+
+    fun isWhitespace(): Boolean {
+        val whiteSpaceCharacters = listOf(
+            Tokenizer.CHARACTER_TABULATION,
+            Tokenizer.LINE_FEED,
+            Tokenizer.FORM_FEED,
+            Tokenizer.CARRIAGE_RETURN,
+            Tokenizer.SPACE,
+        )
+
+        return whiteSpaceCharacters.contains(data)
     }
 
 }

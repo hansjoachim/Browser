@@ -23,11 +23,6 @@ class InputCharacter(
         return type == InputCharacterType.EndOfFile
     }
 
-    @Deprecated("FIXME: replace with isAsciiAlpha or more specific")
-    fun isAlpha(): Boolean {
-        return type == InputCharacterType.Character && Character.isAlphabetic(character.code)
-    }
-
     fun isAsciiDigit(): Boolean {
         return type == InputCharacterType.Character && character.code >= 0x0030 && character.code <= 0x0039
     }

@@ -10,6 +10,7 @@ internal class Tokenizer(document: String) {
         internal const val CHARACTER_TABULATION = 0x0009.toChar()
         internal const val LINE_FEED = 0x000A.toChar()
         internal const val FORM_FEED = 0x000C.toChar()
+        internal const val CARRIAGE_RETURN = 0x000D.toChar()
         internal const val SPACE = 0x0020.toChar()
         internal const val AMPERSAND = '&'
         internal const val LESS_THAN_SIGN = '<'
@@ -1304,7 +1305,7 @@ internal class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter.isAlpha()) {
+                    if (consumedCharacter.isAsciiAlphaNumeric()) {
                         reconsumeIn(TokenizationState.NamedCharacterReferenceState)
                     } else if (consumedCharacter.matches('#')) {
                         temporaryBuffer += consumedCharacter.character
@@ -1335,7 +1336,7 @@ internal class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter.isAlpha()) {
+                    if (consumedCharacter.isAsciiAlphaNumeric()) {
                         //FIXME: as part of attribute
                         emitAsACharacterToken(consumedCharacter)
                     } else if (consumedCharacter.matches(SEMICOLON)) {
