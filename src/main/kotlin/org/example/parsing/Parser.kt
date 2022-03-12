@@ -140,37 +140,9 @@ class Parser(document: String) {
                             "link"
                         ).contains(token.tagName)
                     ) {
-                        insertHtmlElement(token)
-                        openElements.removeLast()
-
-                        //FIXME Acknowledge the token's self-closing flag, if it is set.
+                        inHeadHandleBaseBasefontBgsoundLink(token)
                     } else if (token is StartTagToken && token.tagName == "meta") {
-                        val element = insertHtmlElement(token)
-                        openElements.removeLast()
-
-                        //Acknowledge the token's self-closing flag, if it is set.
-
-                        if (activeSpeculativeHtmlParser == null) {
-
-                            if (element.hasAttribute("charset")) {
-                                val encoding = getEncoding(element.getAttribute("charset"))
-                                if (encoding != null && confidence == EncodingConfidence.tentative) {
-                                    changeEncoding(encoding)
-                                }
-
-                            } else if (element.hasAttribute("http-equiv")) {
-                                if (element.getAttribute("http-equiv").equals("Content-Type", ignoreCase = true)) {
-                                    if (element.hasAttribute("content")) {
-                                        val encoding =
-                                            extractCharacterEncodingFromMetaElement(element.getAttribute("content"))
-                                        if (encoding != null && confidence == EncodingConfidence.tentative) {
-                                            changeEncoding(encoding)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
+                        InHeadMetaStartTag(token)
                     } else if (token is StartTagToken && token.tagName == "title") {
                         genericRCDATAparsing(token)
                     } else if ((token is StartTagToken && token.tagName == "noscript" && scripting)
@@ -188,8 +160,9 @@ class Parser(document: String) {
                     } else if (token is EndTagToken && token.tagName == "head") {
                         openElements.removeLast()
                         switchTo(InsertionMode.afterHead)
-                    } else if ((token is StartTagToken && token.tagName=="head")
-                        || token is EndTagToken){
+                    } else if ((token is StartTagToken && token.tagName == "head")
+                        || token is EndTagToken
+                    ) {
                         parseError(InsertionMode.inHead, token)
                         //Ignore
                     } else {
@@ -271,8 +244,9 @@ class Parser(document: String) {
                         framsetOk = false
                         switchTo(InsertionMode.inBody)
                         //TODO: other cases
-                    } else if ((token is StartTagToken && token.tagName=="head")
-                        || token is EndTagToken){
+                    } else if ((token is StartTagToken && token.tagName == "head")
+                        || token is EndTagToken
+                    ) {
                         parseError(InsertionMode.afterHead, token)
                         //Ignore
                     } else {
@@ -309,16 +283,25 @@ class Parser(document: String) {
                             "title"
                         ).contains(token.tagName)
                     ) {
-                        //Like in head, but separate cases
-
-                        if (listOf("noframes", "style").contains(token.tagName)) {
+                        //Process like in head, but separate cases
+                        if (listOf("base", "basefont", "bgsound", "link").contains(token.tagName)) {
+                            inHeadHandleBaseBasefontBgsoundLink(token)
+                        } else if (token.tagName == "meta"){
+                            InHeadMetaStartTag(token)
+                        } else if (listOf("noframes", "style").contains(token.tagName)) {
+                            //FIXME replace with common
                             genericRawTextElementParsing(token)
                         } else if (token.tagName == "script") {
                             handleScriptTagStartTag(token)
                         } else {
-                            //FIXME: deal with link
+                            //FIXME: remaining unhandled
+                            //"template",
+                            //"title"
                             unhandledMode(InsertionMode.inBody, token)
                         }
+                    } else if (token is EndTagToken && token.tagName == "template") {
+                        //FIXME like in head
+                        unhandledMode(InsertionMode.inBody, token)
                     } else if (token is EndOfFileToken) {
                         if (templateInsertionModes.isNotEmpty()) {
                             TODO("follow the rules for 'in template'")
@@ -555,6 +538,41 @@ class Parser(document: String) {
 
         println("Stopped parsing due to end of file, should probably be handled by some mode??")
         return root
+    }
+
+    private fun InHeadMetaStartTag(token: StartTagToken) {
+        val element = insertHtmlElement(token)
+        openElements.removeLast()
+
+        //Acknowledge the token's self-closing flag, if it is set.
+
+        if (activeSpeculativeHtmlParser == null) {
+
+            if (element.hasAttribute("charset")) {
+                val encoding = getEncoding(element.getAttribute("charset"))
+                if (encoding != null && confidence == EncodingConfidence.tentative) {
+                    changeEncoding(encoding)
+                }
+
+            } else if (element.hasAttribute("http-equiv")) {
+                if (element.getAttribute("http-equiv").equals("Content-Type", ignoreCase = true)) {
+                    if (element.hasAttribute("content")) {
+                        val encoding =
+                            extractCharacterEncodingFromMetaElement(element.getAttribute("content"))
+                        if (encoding != null && confidence == EncodingConfidence.tentative) {
+                            changeEncoding(encoding)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun inHeadHandleBaseBasefontBgsoundLink(token: StartTagToken) {
+        insertHtmlElement(token)
+        openElements.removeLast()
+
+        //FIXME Acknowledge the token's self-closing flag, if it is set.
     }
 
     private fun BeforeHeadAnythingElse(token: Token) {
