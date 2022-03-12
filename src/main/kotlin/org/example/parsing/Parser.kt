@@ -286,7 +286,7 @@ class Parser(document: String) {
                         //Process like in head, but separate cases
                         if (listOf("base", "basefont", "bgsound", "link").contains(token.tagName)) {
                             inHeadHandleBaseBasefontBgsoundLink(token)
-                        } else if (token.tagName == "meta"){
+                        } else if (token.tagName == "meta") {
                             InHeadMetaStartTag(token)
                         } else if (listOf("noframes", "style").contains(token.tagName)) {
                             //FIXME replace with common
@@ -775,8 +775,17 @@ class Parser(document: String) {
             "ol" -> {
                 return HTMLOListElementImpl()
             }
+            "optgroup" -> {
+                return HTMLOptGroupElementImpl()
+            }
+            "option" -> {
+                return HTMLOptionElementImpl()
+            }
             "p" -> {
                 return HTMLParagraphElementImpl()
+            }
+            "select" -> {
+                return HTMLSelectElementImpl()
             }
             "script" -> {
                 return HTMLScriptElementImpl()
