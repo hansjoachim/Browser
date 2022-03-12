@@ -256,7 +256,6 @@ class TokenizerTest {
         assertThat(tokens).containsExactlyElementsOf(expectedTokens)
     }
 
-   @Ignore("FIXME: should check whether ampersands appear in attribute context")
     @Test
     fun should_tokenize_tags_with_ampersand_in_attributes() {
         val simpleExample = "<!DOCTYPE html><html><head><link href='/static/main.css?flag=true&hash=deadbeef' rel='stylesheet'></head><body/></html>"

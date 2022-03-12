@@ -1125,7 +1125,7 @@ internal class Tokenizer(document: String) {
                         emitCurrentToken()
                         emitEndOfFileToken()
                     } else {
-                        //Look for a match including the current charact so need to reset it so it can be parsed as the first match
+                        //Look for a match including the current character. Need to reset so it can be included as the first match
                         //Might be a bit hacky :/
                         inputStream.reset()
 
@@ -1317,16 +1317,30 @@ internal class Tokenizer(document: String) {
                 }
                 TokenizationState.NamedCharacterReferenceState -> {
                     val possibleMatch = matchInCharacterReferenceTable()
+
                     if (possibleMatch != null) {
-                        //FIXME: deal with attributes
+                        val lastCharacterMatched = possibleMatch.characters.toCharArray().asList().last()
 
-                        temporaryBuffer = ""
-                        possibleMatch.codepoints.forEach {
-                            temporaryBuffer += Char(it)
+                        if (wasConsumedAsPartOfAnAttribute()
+                            && lastCharacterMatched != SEMICOLON
+                            && (nextInputCharacterIs(EQUALS_SIGN) || nextInputCharacterIsAnAsciiAlphanumeric())
+                        ) {
+                            //For historical reasons
+                            flushCodePointsConsumedAsACharacterReference()
+                            switchToReturnState()
+                        } else {
+                            if (lastCharacterMatched != SEMICOLON) {
+                                parseError("missing-semicolon-after-character-reference")
+                            }
+
+                            temporaryBuffer = ""
+                            possibleMatch.codepoints.forEach {
+                                temporaryBuffer += Char(it)
+                            }
+
+                            flushCodePointsConsumedAsACharacterReference()
+                            switchToReturnState()
                         }
-
-                        flushCodePointsConsumedAsACharacterReference()
-                        switchTo(returnState as TokenizationState)
                     } else {
                         flushCodePointsConsumedAsACharacterReference()
                         switchTo(TokenizationState.AmbiguousAmpersandState)
@@ -1337,8 +1351,11 @@ internal class Tokenizer(document: String) {
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.isAsciiAlphaNumeric()) {
-                        //FIXME: as part of attribute
-                        emitAsACharacterToken(consumedCharacter)
+                        if (wasConsumedAsPartOfAnAttribute()) {
+                            (currentAttribute as Attribute).value += consumedCharacter.character
+                        } else {
+                            emitAsACharacterToken(consumedCharacter)
+                        }
                     } else if (consumedCharacter.matches(SEMICOLON)) {
                         parseError("unknown-named-character-reference", consumedCharacter)
                         reconsumeIn(returnState as TokenizationState)
@@ -1433,12 +1450,20 @@ internal class Tokenizer(document: String) {
                     temporaryBuffer = ""
                     temporaryBuffer += Char(characterReferenceCode)
                     flushCodePointsConsumedAsACharacterReference()
-                    switchTo(returnState as TokenizationState)
+                    switchToReturnState()
                 }
             }
         }
 
         return emittedTokens.removeFirst()
+    }
+
+    private fun wasConsumedAsPartOfAnAttribute(): Boolean {
+        return listOf(
+            TokenizationState.AttributeValueDoubleQuotedState,
+            TokenizationState.AttributeValueSingleQuotedState,
+            TokenizationState.AttributeValueUnquotedState
+        ).contains(returnState)
     }
 
     private fun isAnAdjustedCurrentNodeAndItIsNotAnElementInTheHTMLNamespace(): Boolean {
@@ -1541,10 +1566,11 @@ internal class Tokenizer(document: String) {
     }
 
     private fun flushCodePointsConsumedAsACharacterReference() {
-        //FIXME: should deal with attributes, or else
-
-        println("Flushing code points as character reference for $temporaryBuffer . Should this have been handled earlier?")
-        temporaryBuffer.toCharArray().map { emitACharacterToken(it) }
+        if (wasConsumedAsPartOfAnAttribute()) {
+            (currentAttribute as Attribute).value += temporaryBuffer
+        } else {
+            temporaryBuffer.toCharArray().map { emitACharacterToken(it) }
+        }
     }
 
     data class ParseError(val errorMessage: String, val inputCharacter: InputCharacter?)
@@ -1556,6 +1582,10 @@ internal class Tokenizer(document: String) {
     private fun reconsumeIn(newState: TokenizationState) {
         inputStream.reset()
         switchTo(newState)
+    }
+
+    private fun switchToReturnState() {
+        switchTo(returnState as TokenizationState)
     }
 
     internal fun switchTo(state: TokenizationState) {
@@ -1640,7 +1670,24 @@ internal class Tokenizer(document: String) {
         return InputCharacter(type = InputCharacterType.EndOfFile)
     }
 
-    //TODO: tests
+
+    private fun nextInputCharacterIs(expectedChar: Char): Boolean {
+        inputStream.mark(1)
+        val peek = Char(inputStream.read())
+        inputStream.reset()
+
+        return peek == expectedChar
+    }
+
+
+    private fun nextInputCharacterIsAnAsciiAlphanumeric(): Boolean {
+        inputStream.mark(1)
+        val peek = consumeCharacter()
+        inputStream.reset()
+
+        return peek.isAsciiAlphaNumeric()
+    }
+
     private fun nextFewCharactersMatch(needle: String, haystack: InputStream, ignoreCase: Boolean = false): Boolean {
         haystack.mark(needle.length)
 

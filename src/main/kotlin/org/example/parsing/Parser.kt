@@ -316,6 +316,7 @@ class Parser(document: String) {
                         } else if (token.tagName == "script") {
                             handleScriptTagStartTag(token)
                         } else {
+                            //FIXME: deal with link
                             unhandledMode(InsertionMode.inBody, token)
                         }
                     } else if (token is EndOfFileToken) {
