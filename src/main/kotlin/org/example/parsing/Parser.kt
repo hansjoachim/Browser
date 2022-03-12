@@ -7,15 +7,17 @@ import org.w3c.dom.Element
 import org.w3c.dom.Node
 import org.w3c.dom.Text
 import org.w3c.dom.html.HTMLElement
+import org.w3c.dom.html.HTMLHeadElement
 import java.lang.Character.isWhitespace
 
 class Parser(document: String) {
 
+    private val activeFormattingElements = mutableListOf<String>()
     private val templateInsertionModes = mutableListOf<InsertionMode>()
     private val tokenizer = Tokenizer(document)
 
     private val scripting: Boolean = false
-    private var framsetOk: Boolean = true
+    private var framesetOk: Boolean = true
     private val fosterParenting = false
 
     private var currentInsertionMode: InsertionMode = InsertionMode.initial
@@ -121,8 +123,6 @@ class Parser(document: String) {
                     }
                 }
                 InsertionMode.inHead -> {
-                    //TODO : lots of if cases
-
                     if (token is CharacterToken && token.isWhitespace()) {
                         insertCharacter(token)
                     } else if (token is CommentToken) {
@@ -160,18 +160,27 @@ class Parser(document: String) {
                     } else if (token is EndTagToken && token.tagName == "head") {
                         openElements.removeLast()
                         switchTo(InsertionMode.afterHead)
+                    } else if (token is EndTagToken && listOf("body", "html", "br").contains(token.tagName)) {
+                        unhandledMode(InsertionMode.inHead, token)
+                    } else if (token is StartTagToken && token.tagName == "template") {
+                        insertHtmlElement(token)
+
+                        val marker = "template"
+                        activeFormattingElements.add(marker)
+
+                        framesetOk = false
+
+                        switchTo(InsertionMode.inTemplate)
+                        templateInsertionModes.add(InsertionMode.inTemplate)
+                    } else if (token is EndTagToken && token.tagName == "template") {
+                        InHeadEndTagTemplate(token)
                     } else if ((token is StartTagToken && token.tagName == "head")
                         || token is EndTagToken
                     ) {
                         parseError(InsertionMode.inHead, token)
                         //Ignore
                     } else {
-                        //Pop the current node (which will be the head element) off the stack of open elements.
-                        openElements.removeLast()
-
-                        switchTo(InsertionMode.afterHead)
-
-                        reprocessCurrentToken(token)
+                        InHeadAnythingElse(token)
                     }
                 }
                 InsertionMode.inHeadNoscript -> {
@@ -236,14 +245,34 @@ class Parser(document: String) {
                         //Ignore
                     } else if (token is StartTagToken && token.tagName == "html") {
                         //FIXME: like in body
-                        unhandledMode(InsertionMode.beforeHead, token)
+                        unhandledMode(InsertionMode.afterHead, token)
                     } else if (token is StartTagToken && token.tagName == "body") {
                         insertHtmlElement(token)
                         //Set the Document's awaiting parser-inserted body flag to false.
 
-                        framsetOk = false
+                        framesetOk = false
                         switchTo(InsertionMode.inBody)
-                        //TODO: other cases
+                    } else if (token is StartTagToken && token.tagName == "frameset") {
+                        insertHtmlElement(token)
+                        switchTo(InsertionMode.inFrameset)
+                    } else if (token is StartTagToken && listOf(
+                            "base",
+                            "basefont",
+                            "bgsound",
+                            "link",
+                            "meta",
+                            "noframes",
+                            "script",
+                            "style",
+                            "template",
+                            "title"
+                        ).contains(token.tagName)
+                    ) {
+                        unhandledMode(InsertionMode.afterHead, token)
+                    } else if (token is EndTagToken && token.tagName == "template") {
+                        unhandledMode(InsertionMode.afterHead, token)
+                    } else if (token is EndTagToken && listOf("body", "html", "br").contains(token.tagName)) {
+                        unhandledMode(InsertionMode.afterHead, token)
                     } else if ((token is StartTagToken && token.tagName == "head")
                         || token is EndTagToken
                     ) {
@@ -255,16 +284,11 @@ class Parser(document: String) {
                 }
                 InsertionMode.inBody -> {
                     if (token is CharacterToken && token.data == NULL_CHARACTER) {
-                        //TODO parseError without comment/type in spec
-                        //Ignore
-                        //FIXME: replace whitespace check
-                    } else if (token is CharacterToken && isWhitespace(token.data)) {
-                        reconstructTheActiveFormattingElements()
-                        insertCharacter(token)
+                        InBodyNullCharacter(token)
+                    } else if (token is CharacterToken && token.isWhitespace()) {
+                        InBodyWhitespaceCharacter(token)
                     } else if (token is CharacterToken) {
-                        reconstructTheActiveFormattingElements()
-                        insertCharacter(token)
-                        framsetOk = false
+                        InBodyAnyOtherCharacter(token)
                     } else if (token is CommentToken) {
                         insertComment(token)
                     } else if (token is DOCTYPEToken) {
@@ -489,7 +513,57 @@ class Parser(document: String) {
                     unhandledMode(InsertionMode.inSelectInTable, token)
                 }
                 InsertionMode.inTemplate -> {
-                    unhandledMode(InsertionMode.inTemplate, token)
+                    if (token is CharacterToken
+                        || token is CommentToken
+                        || token is DOCTYPEToken
+                    ) {
+                        if (token is CharacterToken && token.data == NULL_CHARACTER) {
+                            InBodyNullCharacter(token)
+                        } else if (token is CharacterToken && token.isWhitespace()) {
+                            InBodyWhitespaceCharacter(token)
+                        } else if (token is CharacterToken) {
+                            InBodyAnyOtherCharacter(token)
+                        } else {
+                            unhandledMode(InsertionMode.inTemplate, token)
+                        }
+                    } else if (token is StartTagToken && listOf(
+                            "base",
+                            "basefont",
+                            "bgsound",
+                            "link",
+                            "meta",
+                            "noframes",
+                            "script",
+                            "style",
+                            "template",
+                            "title"
+                        ).contains(token.tagName)
+                    ) {
+                        if (listOf(
+                                "base",
+                                "basefont",
+                                "bgsound",
+                                "link"
+                            ).contains(token.tagName)
+                        ) {
+                            inHeadHandleBaseBasefontBgsoundLink(token)
+                        } else if (token.tagName == "meta") {
+                            InHeadMetaStartTag(token)
+                        } else if (token.tagName == "script") {
+                            handleScriptTagStartTag(token)
+                        } else {
+                            //FIXME: like in head, remaining
+//                            "noframes",
+//                            "style",
+//                            "template",
+//                            "title"
+                            unhandledMode(InsertionMode.inTemplate, token)
+                        }
+                    } else if (token is EndTagToken && token.tagName == "template") {
+                        InHeadEndTagTemplate(token)
+                    } else {
+                        unhandledMode(InsertionMode.inTemplate, token)
+                    }
                 }
                 InsertionMode.afterBody -> {
                     if (token is CharacterToken && isWhitespace(token.data)) {
@@ -538,6 +612,97 @@ class Parser(document: String) {
 
         println("Stopped parsing due to end of file, should probably be handled by some mode??")
         return root
+    }
+
+    private fun InBodyAnyOtherCharacter(token: CharacterToken) {
+        reconstructTheActiveFormattingElements()
+        insertCharacter(token)
+        framesetOk = false
+    }
+
+    private fun InBodyWhitespaceCharacter(token: CharacterToken) {
+        reconstructTheActiveFormattingElements()
+        insertCharacter(token)
+    }
+
+    private fun InBodyNullCharacter(token: CharacterToken) {
+        parseError(InsertionMode.inBody, token)
+        //Ignore
+    }
+
+    private fun InHeadEndTagTemplate(token: Token) {
+        if (!openElements.any { it is HTMLElement && it.tagName == "template" }) {
+            parseError(InsertionMode.inHead, token)
+            //Ignore
+        } else {
+            generateAllImpliedEndTagsThoroughly()
+
+            val currentNode = openElements.last() as HTMLElement
+            if (currentNode.tagName != "template") {
+                parseError(InsertionMode.inHead, token)
+            }
+
+            popElementsFromStackOfOpenElementsUntilAElementHasBeenPopped("template")
+
+            clearListOfActiveFormattingElementsUpToTheLastMarker()
+
+            templateInsertionModes.removeLast()
+
+            resetInsertionModeAppropriately()
+        }
+    }
+
+    private fun resetInsertionModeAppropriately() {
+        //FIXME implement loop with more steps/branches
+        var last = false
+        var node = openElements.last()
+
+        if (node == openElements.first()) {
+            last = true
+        }
+
+        if (node is HTMLHeadElement && !last) {
+            switchTo(InsertionMode.inHead)
+            return
+        }
+
+        val name = when (node) {
+            is HTMLElement -> node.tagName
+            else -> {
+                "Unknown"
+            }
+        }
+        println("Could not reset insertion mode for $name")
+    }
+
+    private fun clearListOfActiveFormattingElementsUpToTheLastMarker() {
+        var entry = activeFormattingElements.last()
+
+        activeFormattingElements.removeLast()
+
+        //FIXME: if entry is a marker, finished, otherwise loop again
+        // Need to look more into what I actually should (or can) insert in the list
+    }
+
+    private fun popElementsFromStackOfOpenElementsUntilAElementHasBeenPopped(targetTagName: String) {
+        var lastPopped: Node? = null
+
+        do {
+            lastPopped = openElements.removeLast()
+        } while (!(lastPopped is HTMLElement && lastPopped.tagName == targetTagName))
+    }
+
+    private fun generateAllImpliedEndTagsThoroughly() {
+        //FIXME: implement
+    }
+
+    private fun InHeadAnythingElse(token: Token) {
+        //Pop the current node (which will be the head element) off the stack of open elements.
+        openElements.removeLast()
+
+        switchTo(InsertionMode.afterHead)
+
+        reprocessCurrentToken(token)
     }
 
     private fun InHeadMetaStartTag(token: StartTagToken) {

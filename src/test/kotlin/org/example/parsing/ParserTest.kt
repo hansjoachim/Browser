@@ -175,6 +175,38 @@ class ParserTest {
     }
 
     @Test
+    fun should_parse_example_with_template_tags() {
+        val simpleExample = """
+<!DOCTYPE html>
+<html>
+<head>
+    <template>
+        <link href="main.css" rel="stylesheet">
+    </template>
+</head>
+<body />
+</html>
+"""
+        val document = Parser(simpleExample).parse()
+
+        val expectedDOM = """#document
+	html
+		head
+			#text
+			template
+				#text
+				link
+				#text
+			#text
+		#text
+		body
+			#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
+    }
+
+    @Test
     fun should_parse_noscript() {
         val simpleExample = """
 <!DOCTYPE html>
