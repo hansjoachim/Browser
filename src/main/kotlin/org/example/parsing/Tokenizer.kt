@@ -22,14 +22,12 @@ internal class Tokenizer(document: String) {
         internal const val GREATER_THAN_SIGN = '>'
         internal const val HYPHEN_MINUS = '-'
         internal const val EQUALS_SIGN = '='
+        internal const val GRAVE_ACCENT = '`'
         internal const val QUOTATION_MARK = '"'
         internal const val APOSTROPHE = '\''
         internal const val SEMICOLON = ';'
         internal const val LATIN_SMALL_LETTER_X = 'x'
         internal const val LATIN_CAPITAL_LETTER_X = 'X'
-
-        internal const val NBSP_CODE = 0x000A0
-        internal const val NBSP = NBSP_CODE.toChar()
     }
 
     //TODO: stringstream instead of bytes to skip conversion back and forth?
@@ -729,7 +727,6 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.BeforeAttributeValueState -> {
-                    //FIXME: all cases above are handled, move on further down from here
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
@@ -740,7 +737,7 @@ internal class Tokenizer(document: String) {
                     } else if (consumedCharacter.matches(APOSTROPHE)) {
                         switchTo(TokenizationState.AttributeValueSingleQuotedState)
                     } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
-                        //This is a missing-attribute-value parse error.
+                        parseError("missing-attribute-value", consumedCharacter)
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
                     } else {
@@ -752,7 +749,15 @@ internal class Tokenizer(document: String) {
 
                     if (consumedCharacter.matches(QUOTATION_MARK)) {
                         switchTo(TokenizationState.AfterAttributeValueQuotedState)
-                        //TODO: more cases
+                    } else if (consumedCharacter.matches(AMPERSAND)) {
+                        returnState = TokenizationState.AttributeValueDoubleQuotedState
+                        switchTo(TokenizationState.CharacterReferenceState)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        (currentAttribute as Attribute).value += REPLACEMENT_CHARACTER
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-tag")
+                        emitEndOfFileToken()
                     } else {
                         (currentAttribute as Attribute).value += consumedCharacter.character
                     }
@@ -762,7 +767,15 @@ internal class Tokenizer(document: String) {
 
                     if (consumedCharacter.matches(APOSTROPHE)) {
                         switchTo(TokenizationState.AfterAttributeValueQuotedState)
-                        //TODO: more cases
+                    } else if (consumedCharacter.matches(AMPERSAND)) {
+                        returnState = TokenizationState.AttributeValueSingleQuotedState
+                        switchTo(TokenizationState.CharacterReferenceState)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        (currentAttribute as Attribute).value += REPLACEMENT_CHARACTER
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-tag")
+                        emitEndOfFileToken()
                     } else {
                         (currentAttribute as Attribute).value += consumedCharacter.character
                     }
@@ -772,11 +785,29 @@ internal class Tokenizer(document: String) {
 
                     if (consumedCharacter.isWhitespace()) {
                         switchTo(TokenizationState.BeforeAttributeNameState)
+                    } else if (consumedCharacter.matches(AMPERSAND)) {
+                        returnState = TokenizationState.AttributeValueUnquotedState
+                        switchTo(TokenizationState.CharacterReferenceState)
                     } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character", consumedCharacter)
+                        (currentAttribute as Attribute).value += REPLACEMENT_CHARACTER
+                    } else if (
+                        consumedCharacter.matches(QUOTATION_MARK)
+                        || consumedCharacter.matches(APOSTROPHE)
+                        || consumedCharacter.matches(LESS_THAN_SIGN)
+                        || consumedCharacter.matches(EQUALS_SIGN)
+                        || consumedCharacter.matches(GRAVE_ACCENT)
+                    ) {
+                        parseError("unexpected-character-in-unquoted-attribute-value", consumedCharacter)
+                        AttributeValueUnquotedStateAnythingElse(consumedCharacter)
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-tag")
+                        emitEndOfFileToken()
                     } else {
-                        (currentAttribute as Attribute).value += consumedCharacter.character
+                        AttributeValueUnquotedStateAnythingElse(consumedCharacter)
                     }
                 }
                 TokenizationState.AfterAttributeValueQuotedState -> {
@@ -794,19 +825,24 @@ internal class Tokenizer(document: String) {
                         parseError("eof-in-tag")
                         emitEndOfFileToken()
                     } else {
-                        //This is a missing-whitespace-between-attributes parse error.
+                        parseError("missing-whitespace-between-attributes", consumedCharacter)
                         reconsumeIn(TokenizationState.BeforeAttributeNameState)
                     }
                 }
                 TokenizationState.SelfClosingStartTagState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
                         (currentToken as StartTagToken).selfClosing = true
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-tag")
+                        emitEndOfFileToken()
                     } else {
-                        unhandledCase(TokenizationState.SelfClosingStartTagState, consumedCharacter)
+                        parseError("unexpected-solidus-in-tag", consumedCharacter)
+                        reconsumeIn(TokenizationState.BeforeAttributeNameState)
                     }
                 }
                 TokenizationState.BogusCommentState -> {
@@ -826,15 +862,27 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.MarkupDeclarationOpenState -> {
-                    if (nextCharactersAreCaseInsensitiveMatch("--", inputStream)) {
+                    if (nextFewCharactersMatch("--", inputStream)) {
                         consumeCharacters("--")
                         currentToken = CommentToken()
                         switchTo(TokenizationState.CommentStartState)
-                    } else if (nextCharactersAreCaseInsensitiveMatch("DOCTYPE", inputStream)) {
+                    } else if (nextFewCharactersMatch("DOCTYPE", inputStream, ignoreCase = true)) {
                         consumeCharacters("DOCTYPE")
                         switchTo(TokenizationState.DOCTYPEState)
+                    } else if (nextFewCharactersMatch("[CDATA[", inputStream)) {
+                        consumeCharacters("[CDATA[")
+
+                        if (isAnAdjustedCurrentNodeAndItIsNotAnElementInTheHTMLNamespace()) {
+                            switchTo(TokenizationState.CDATASectionState)
+                        } else {
+                            parseError("cdata-in-html-content")
+                            currentToken = CommentToken(data = "[CDATA[")
+                            switchTo(TokenizationState.BogusCommentState)
+                        }
                     } else {
-                        unhandledCase(TokenizationState.MarkupDeclarationOpenState)
+                        parseError("incorrectly-opened-comment")
+                        currentToken = CommentToken()
+                        switchTo(TokenizationState.BogusCommentState)
                     }
                 }
                 TokenizationState.CommentStartState -> {
@@ -844,7 +892,7 @@ internal class Tokenizer(document: String) {
                     if (consumedCharacter.matches(HYPHEN_MINUS)) {
                         switchTo(TokenizationState.CommentStartDashState)
                     } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
-                        //This is an abrupt-closing-of-empty-comment parse error.
+                        parseError("abrupt-closing-of-empty-comment", consumedCharacter)
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
                     } else {
@@ -852,8 +900,23 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.CommentStartDashState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.CommentStartDashState, consumedCharacter)
+
+                    if (consumedCharacter.matches(HYPHEN_MINUS)) {
+                        switchTo(TokenizationState.CommentEndState)
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        parseError("abrupt-closing-of-empty-comment", consumedCharacter)
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-comment")
+                        emitCurrentToken()
+                        emitEndOfFileToken()
+                    } else {
+                        (currentToken as CommentToken).data += HYPHEN_MINUS
+                        reconsumeIn(TokenizationState.CommentState)
+                    }
                 }
                 TokenizationState.CommentState -> {
                     val consumedCharacter = consumeCharacter()
@@ -863,6 +926,13 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.CommentLessThanSignState)
                     } else if (consumedCharacter.matches(HYPHEN_MINUS)) {
                         switchTo(TokenizationState.CommentEndDashState)
+                    } else if (consumedCharacter.matches(NULL_CHARACTER)) {
+                        parseError("unexpected-null-character")
+                        (currentToken as CommentToken).data += REPLACEMENT_CHARACTER
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-comment")
+                        emitCurrentToken()
+                        emitEndOfFileToken()
                     } else {
                         (currentToken as CommentToken).data += consumedCharacter.character
                     }
@@ -870,6 +940,7 @@ internal class Tokenizer(document: String) {
                 TokenizationState.CommentLessThanSignState -> {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
+
                     if (consumedCharacter.matches(EXCLAMATION_MARK)) {
                         (currentToken as CommentToken).data += consumedCharacter.character
                         switchTo(TokenizationState.CommentLessThanSignBangState)
@@ -903,11 +974,12 @@ internal class Tokenizer(document: String) {
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
-                    if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
-                        //TODO: or EOF
+                    if (consumedCharacter.matches(GREATER_THAN_SIGN)
+                        || consumedCharacter.isEndOfFile()
+                    ) {
                         reconsumeIn(TokenizationState.CommentEndState)
                     } else {
-                        parseError("nested-comment")
+                        parseError("nested-comment", consumedCharacter)
                         reconsumeIn(TokenizationState.CommentEndState)
                     }
                 }
@@ -917,7 +989,10 @@ internal class Tokenizer(document: String) {
 
                     if (consumedCharacter.matches(HYPHEN_MINUS)) {
                         switchTo(TokenizationState.CommentEndState)
-                        //TODO: deal with null character
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-comment")
+                        emitCurrentToken()
+                        emitEndOfFileToken()
                     } else {
                         //Explicity append, since the - has already been consumed
                         (currentToken as CommentToken).data += HYPHEN_MINUS
@@ -925,20 +1000,55 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.CommentEndState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
                     if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
-                        emitCurrentToken()
                         switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.matches(EXCLAMATION_MARK)) {
+                        switchTo(TokenizationState.CommentEndBangState)
+                    } else if (consumedCharacter.matches(HYPHEN_MINUS)) {
+                        (currentToken as CommentToken).data += HYPHEN_MINUS
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-comment")
+                        emitCurrentToken()
+                        emitEndOfFileToken()
                     } else {
-                        unhandledCase(TokenizationState.CommentEndState, consumedCharacter)
+                        //Explicity append, since the -- has already been consumed
+                        (currentToken as CommentToken).data += HYPHEN_MINUS
+                        (currentToken as CommentToken).data += HYPHEN_MINUS
+                        reconsumeIn(TokenizationState.CommentState)
                     }
                 }
                 TokenizationState.CommentEndBangState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.CommentEndBangState, consumedCharacter)
+
+                    if (consumedCharacter.matches(HYPHEN_MINUS)) {
+                        (currentToken as CommentToken).data += HYPHEN_MINUS
+                        (currentToken as CommentToken).data += HYPHEN_MINUS
+                        (currentToken as CommentToken).data += EXCLAMATION_MARK
+
+                        switchTo(TokenizationState.CommentEndDashState)
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        parseError("incorrectly-closed-comment", consumedCharacter)
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-comment")
+                        emitCurrentToken()
+                        emitEndOfFileToken()
+                    } else {
+                        (currentToken as CommentToken).data += HYPHEN_MINUS
+                        (currentToken as CommentToken).data += HYPHEN_MINUS
+                        (currentToken as CommentToken).data += EXCLAMATION_MARK
+
+                        reconsumeIn(TokenizationState.CommentState)
+                    }
                 }
                 TokenizationState.DOCTYPEState -> {
+                    //FIXME: all cases above are handled, move on further down from here
                     inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
 
@@ -1018,10 +1128,10 @@ internal class Tokenizer(document: String) {
                         //Might be a bit hacky :/
                         inputStream.reset()
 
-                        if (nextCharactersAreCaseInsensitiveMatch("PUBLIC", inputStream)) {
+                        if (nextFewCharactersMatch("PUBLIC", inputStream, ignoreCase = true)) {
                             consumeCharacters("PUBLIC")
                             switchTo(TokenizationState.AfterDOCTYPEPublicKeywordState)
-                        } else if (nextCharactersAreCaseInsensitiveMatch("SYSTEM", inputStream)) {
+                        } else if (nextFewCharactersMatch("SYSTEM", inputStream, ignoreCase = true)) {
                             consumeCharacters("SYSTEM")
                             switchTo(TokenizationState.AfterDOCTYPESystemKeywordState)
                         } else {
@@ -1330,6 +1440,15 @@ internal class Tokenizer(document: String) {
         return emittedTokens.removeFirst()
     }
 
+    private fun isAnAdjustedCurrentNodeAndItIsNotAnElementInTheHTMLNamespace(): Boolean {
+        //FIXME: implement
+        return false
+    }
+
+    private fun AttributeValueUnquotedStateAnythingElse(consumedCharacter: InputCharacter) {
+        (currentAttribute as Attribute).value += consumedCharacter.character
+    }
+
     private fun startANewAttributeIn(tagToken: TagToken, attributeName: String = "", value: String = "") {
         currentAttribute = Attribute(attributeName, value)
         tagToken.attributes.add(currentAttribute as Attribute)
@@ -1521,7 +1640,7 @@ internal class Tokenizer(document: String) {
     }
 
     //TODO: tests
-    private fun nextCharactersAreCaseInsensitiveMatch(needle: String, haystack: InputStream): Boolean {
+    private fun nextFewCharactersMatch(needle: String, haystack: InputStream, ignoreCase: Boolean = false): Boolean {
         haystack.mark(needle.length)
 
         for (c in needle.toCharArray()) {
@@ -1529,7 +1648,7 @@ internal class Tokenizer(document: String) {
                 return false
             }
             val peek = Char(haystack.read())
-            if (!peek.toString().equals(c.toString(), ignoreCase = true)) {
+            if (!peek.toString().equals(c.toString(), ignoreCase = ignoreCase)) {
                 haystack.reset()
                 return false
             }

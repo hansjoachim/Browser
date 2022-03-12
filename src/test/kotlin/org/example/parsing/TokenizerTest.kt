@@ -110,6 +110,26 @@ class TokenizerTest {
     }
 
     @Test
+    fun should_tokenize_cdata_comment() {
+        val simpleExample = "<!DOCTYPE html><html><body><![CDATA[Other comment type]]></body></html>"
+        val tokenizer = Tokenizer(simpleExample)
+
+        val tokens = allTokens(tokenizer)
+
+        val expectedTokens = listOf(
+            DOCTYPEToken("html"),
+            StartTagToken("html"),
+            StartTagToken("body"),
+            CommentToken("[CDATA[Other comment type]]"),
+            EndTagToken("body"),
+            EndTagToken("html"),
+            EndOfFileToken()
+        )
+
+        assertThat(tokens).containsExactlyElementsOf(expectedTokens)
+    }
+
+    @Test
     fun should_tokenize_tags_with_attribute() {
         val simpleExample = "<!DOCTYPE html><html lang=en></html>"
         val tokenizer = Tokenizer(simpleExample)
