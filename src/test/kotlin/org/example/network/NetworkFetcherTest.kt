@@ -3,6 +3,7 @@ package org.example.network
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import java.net.http.HttpClient
@@ -46,7 +47,33 @@ class NetworkFetcherTest {
 
         assertThat(response).isEqualTo("Second")
 
-        verify(exactly = 2) { mockClient.send(any(), eq(HttpResponse.BodyHandlers.ofString())) }
+        verifyOrder {
+            mockClient.send(match { it.uri().host == "example.com" }, eq(HttpResponse.BodyHandlers.ofString()))
+            mockClient.send(match { it.uri().host == "moved.example.com" }, eq(HttpResponse.BodyHandlers.ofString()))
+        }
+    }
+
+    @Test
+    fun should_follow_relative_redirects() {
+        val mockClient = mockk<HttpClient>()
+        every { mockClient.send(any(), eq(HttpResponse.BodyHandlers.ofString())) } returns mockHttpResponse(
+            301,
+            "First",
+            mapOf(Pair("Location", listOf("/index.html")))
+        ) andThen mockHttpResponse(
+            200,
+            "Second"
+        )
+        val network = NetworkFetcher(mockClient)
+
+        val response = network.getRequest("http://example.com")
+
+        assertThat(response).isEqualTo("Second")
+
+        verifyOrder {
+            mockClient.send(match { it.uri().host == "example.com" && it.uri().path.isBlank() }, eq(HttpResponse.BodyHandlers.ofString()))
+            mockClient.send(match { it.uri().host == "example.com" && it.uri().path == "/index.html" }, eq(HttpResponse.BodyHandlers.ofString()))
+        }
     }
 
     @Test
