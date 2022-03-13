@@ -994,6 +994,12 @@ class Parser(document: String) {
             "button" -> {
                 return HTMLButtonElementImpl()
             }
+            "caption" -> {
+                return HTMLTableCaptionElementImpl()
+            }
+            "col", "colgroup" -> {
+                return HTMLTableColElementImpl(tagName)
+            }
             "div" -> {
                 return HtmlDivElementImpl()
             }
@@ -1044,6 +1050,9 @@ class Parser(document: String) {
             }
             "table" -> {
                 return HTMLTableElementImpl()
+            }
+            "tbody", "thead", "tfoot" -> {
+                return HTMLTableSectionElementImpl(tagName)
             }
             "td", "th" -> {
                 return HTMLTableCellElementImpl(tagName)
