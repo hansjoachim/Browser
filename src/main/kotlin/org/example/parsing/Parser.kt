@@ -19,6 +19,7 @@ class Parser(document: String) {
     private val scripting: Boolean = false
     private var framesetOk: Boolean = true
     private val fosterParenting = false
+    private val createdAsPartOfTheHTMLFragmentParsingAlgorithm = false
 
     private var currentInsertionMode: InsertionMode = InsertionMode.initial
     private var originalInsertionMode: InsertionMode? = null
@@ -145,13 +146,14 @@ class Parser(document: String) {
                         InHeadMetaStartTag(token)
                     } else if (token is StartTagToken && token.tagName == "title") {
                         genericRCDATAparsing(token)
-                    } else if ((token is StartTagToken && token.tagName == "noscript" && scripting)
-                        || (token is StartTagToken && listOf(
+                    } else if ((token is StartTagToken && token.tagName == "noscript" && scripting)) {
+                        InHeadNoscriptAndScriptingFlag(token)
+                    } else if ((token is StartTagToken && listOf(
                             "noframes",
                             "style"
                         ).contains(token.tagName))
                     ) {
-                        genericRawTextElementParsing(token)
+                        InHeadNoframesOrStyles(token)
                     } else if (token is StartTagToken && token.tagName == "noscript" && !scripting) {
                         insertHtmlElement(token)
                         switchTo(InsertionMode.inHeadNoscript)
@@ -279,7 +281,11 @@ class Parser(document: String) {
                         parseError(InsertionMode.afterHead, token)
                         //Ignore
                     } else {
-                        unhandledMode(InsertionMode.afterHead, token)
+                        val fakeBody = StartTagToken("body")
+                        insertHtmlElement(fakeBody)
+                        switchTo(InsertionMode.inBody)
+
+                        reprocessCurrentToken(token)
                     }
                 }
                 InsertionMode.inBody -> {
@@ -313,8 +319,7 @@ class Parser(document: String) {
                         } else if (token.tagName == "meta") {
                             InHeadMetaStartTag(token)
                         } else if (listOf("noframes", "style").contains(token.tagName)) {
-                            //FIXME replace with common
-                            genericRawTextElementParsing(token)
+                            InHeadNoframesOrStyles(token)
                         } else if (token.tagName == "script") {
                             handleScriptTagStartTag(token)
                         } else {
@@ -549,12 +554,16 @@ class Parser(document: String) {
                             inHeadHandleBaseBasefontBgsoundLink(token)
                         } else if (token.tagName == "meta") {
                             InHeadMetaStartTag(token)
+                        } else if (listOf(
+                                "noframes",
+                                "style"
+                            ).contains(token.tagName)
+                        ) {
+                            InHeadNoframesOrStyles(token)
                         } else if (token.tagName == "script") {
                             handleScriptTagStartTag(token)
                         } else {
                             //FIXME: like in head, remaining
-//                            "noframes",
-//                            "style",
 //                            "template",
 //                            "title"
                             unhandledMode(InsertionMode.inTemplate, token)
@@ -585,10 +594,68 @@ class Parser(document: String) {
                     }
                 }
                 InsertionMode.inFrameset -> {
-                    unhandledMode(InsertionMode.inFrameset, token)
+                    if (token is CharacterToken && token.isWhitespace()) {
+                        insertCharacter(token)
+                    } else if (token is CommentToken) {
+                        insertComment(token)
+                    } else if (token is DOCTYPEToken) {
+                        parseError(InsertionMode.inFrameset, token)
+                        //Ignore
+                    } else if (token is StartTagToken && token.tagName == "html") {
+                        unhandledMode(InsertionMode.inFrameset, token)
+                    } else if (token is StartTagToken && token.tagName == "frameset") {
+                        insertHtmlElement(token)
+                    } else if (token is EndTagToken && token.tagName == "frameset") {
+                        if (currentNodeIsTheRootHtmlElement()) {
+                            parseError(InsertionMode.inFrameset, token)
+                            //Ignore
+                        } else {
+                            openElements.removeLast()
+
+                            val currentNode = openElements.last()
+                            if (!createdAsPartOfTheHTMLFragmentParsingAlgorithm
+                                && (currentNode as HTMLElement).tagName != "frameset"
+                            ) {
+                                switchTo(InsertionMode.afterFrameset)
+                            }
+                        }
+                    } else if (token is StartTagToken && token.tagName == "frame") {
+                        insertHtmlElement(token)
+                        openElements.removeLast()
+
+                        //FIXME Acknowledge the token's self-closing flag, if it is set.
+                    } else if (token is StartTagToken && token.tagName == "noframes") {
+                        InHeadNoframesOrStyles(token)
+                    } else if (token is EndOfFileToken) {
+                        if (currentNodeIsTheRootHtmlElement()) {
+                            parseError(InsertionMode.inFrameset, token)
+                        }
+                        return stopParsing(root)
+                    } else {
+                        parseError(InsertionMode.inFrameset, token)
+                        //Ignore
+                    }
                 }
                 InsertionMode.afterFrameset -> {
-                    unhandledMode(InsertionMode.afterFrameset, token)
+                    if (token is CharacterToken && token.isWhitespace()) {
+                        insertCharacter(token)
+                    } else if (token is CommentToken) {
+                        insertComment(token)
+                    } else if (token is DOCTYPEToken) {
+                        parseError(InsertionMode.afterFrameset, token)
+                        //Ignore
+                    } else if (token is StartTagToken && token.tagName == "html") {
+                        unhandledMode(InsertionMode.afterFrameset, token)
+                    } else if (token is EndTagToken && token.tagName == "html") {
+                        switchTo(InsertionMode.afterAfterFrameset)
+                    } else if (token is StartTagToken && token.tagName == "noframes") {
+                        InHeadNoframesOrStyles(token)
+                    } else if (token is EndTagToken) {
+                        return stopParsing(root)
+                    } else {
+                        parseError(InsertionMode.afterFrameset, token)
+                        //Ignore
+                    }
                 }
                 InsertionMode.afterAfterBody -> {
                     if (token is CommentToken) {
@@ -605,13 +672,33 @@ class Parser(document: String) {
                     }
                 }
                 InsertionMode.afterAfterFrameset -> {
-                    unhandledMode(InsertionMode.afterAfterFrameset, token)
+                    if (token is CharacterToken && token.isWhitespace()) {
+                        InBodyWhitespaceCharacter(token)
+                    } else if (token is EndOfFileToken) {
+                        return stopParsing(root)
+                    } else {
+                        unhandledMode(InsertionMode.afterAfterFrameset, token)
+                    }
                 }
             }
         } while (token !is EndOfFileToken)
 
         println("Stopped parsing due to end of file, should probably be handled by some mode??")
         return root
+    }
+
+    private fun currentNodeIsTheRootHtmlElement(): Boolean {
+        val currentNode = openElements.last()
+        //TODO: check if it is the _root_ html element
+        return currentNode is HTMLElement && currentNode.tagName == "html"
+    }
+
+    private fun InHeadNoscriptAndScriptingFlag(token: StartTagToken) {
+        genericRawTextElementParsing(token)
+    }
+
+    private fun InHeadNoframesOrStyles(token: StartTagToken) {
+        genericRawTextElementParsing(token)
     }
 
     private fun InBodyAnyOtherCharacter(token: CharacterToken) {

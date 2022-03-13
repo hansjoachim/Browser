@@ -359,7 +359,43 @@ This tag can contain lots of fun stuff, and it never even ends
 """
         val tree = DOMDebugger.getDOMTree(document)
         assertThat(tree).isEqualTo(expectedDOM)
+    }
 
+    @Test
+    fun should_parse_frames() {
+        val framesExample = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+            </head>
+            <frameset cols="50%,50%">
+              <frame src="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/frameset" />
+              <frame src="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/frame" />
+              <noframes><p>Fallback text<p/></noframes>
+            </frameset>
+            </html>
+        """.trimIndent()
+
+        val document = Parser(framesExample).parse()
+
+        val expectedDOM = """#document
+	html
+		head
+			#text
+		#text
+		frameset
+			#text
+			frame
+			#text
+			frame
+			#text
+			noframes
+				#text
+			#text
+		#text
+"""
+        val tree = DOMDebugger.getDOMTree(document)
+        assertThat(tree).isEqualTo(expectedDOM)
     }
 
     //TODO: expected this would break with the simple popping of current element. Let's revisit this in a while

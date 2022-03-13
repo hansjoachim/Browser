@@ -1199,6 +1199,9 @@ internal class Tokenizer(document: String) {
                     val consumedCharacter = consumeCharacter()
                     if (consumedCharacter.isWhitespace()) {
                         switchTo(TokenizationState.BetweenDOCTYPEPublicAndSystemIdentifiersState)
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        switchTo(TokenizationState.DataState)
+                        emitCurrentToken()
                         //FIXME: more cases
                     } else {
                         unhandledCase(TokenizationState.AfterDOCTYPEPublicIdentifierState, consumedCharacter)
