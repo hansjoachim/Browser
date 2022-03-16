@@ -29,6 +29,8 @@ internal class Tokenizer(document: String) {
         internal const val SEMICOLON = ';'
         internal const val LATIN_SMALL_LETTER_X = 'x'
         internal const val LATIN_CAPITAL_LETTER_X = 'X'
+        internal const val RIGHT_SQUARE_BRACKET = ']'
+        internal const val NUMBER_SIGN = '#'
     }
 
     //TODO: stringstream instead of bytes to skip conversion back and forth?
@@ -1425,7 +1427,7 @@ internal class Tokenizer(document: String) {
                         switchTo(TokenizationState.DataState)
                         emitCurrentToken()
                     } else if (consumedCharacter.isEndOfFile()) {
-                        parseError("eof-in-doctype", consumedCharacter)
+                        parseError("eof-in-doctype")
                         (currentToken as DOCTYPEToken).forceQuirks = "on"
                         emitCurrentToken()
                         emitEndOfFileToken()
@@ -1469,17 +1471,42 @@ internal class Tokenizer(document: String) {
                     }
                 }
                 TokenizationState.CDATASectionState -> {
-                    //FIXME: all cases above are handled, move on further down from here
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.CDATASectionState, consumedCharacter)
+
+                    if (consumedCharacter.matches(RIGHT_SQUARE_BRACKET)) {
+                        switchTo(TokenizationState.CDATASectionBracketState)
+                    } else if (consumedCharacter.isEndOfFile()) {
+                        parseError("eof-in-doctype")
+                        emitEndOfFileToken()
+                    } else {
+                        emitAsACharacterToken(consumedCharacter)
+                        //Note: NULL characters are handled later, this will only appear in the foreign content insertion mode, the only place where CDATA appear
+                    }
                 }
                 TokenizationState.CDATASectionBracketState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.CDATASectionBracketState, consumedCharacter)
+
+                    if (consumedCharacter.matches(RIGHT_SQUARE_BRACKET)) {
+                        switchTo(TokenizationState.CDATASectionEndState)
+                    } else {
+                        emitACharacterToken(RIGHT_SQUARE_BRACKET)
+                        reconsumeIn(TokenizationState.CDATASectionState)
+                    }
                 }
                 TokenizationState.CDATASectionEndState -> {
+                    inputStream.mark(1)
                     val consumedCharacter = consumeCharacter()
-                    unhandledCase(TokenizationState.CDATASectionEndState, consumedCharacter)
+
+                    if (consumedCharacter.matches(RIGHT_SQUARE_BRACKET)) {
+                        emitACharacterToken(RIGHT_SQUARE_BRACKET)
+                    } else if (consumedCharacter.matches(GREATER_THAN_SIGN)) {
+                        switchTo(TokenizationState.DataState)
+                    } else {
+                        emitACharacterToken(RIGHT_SQUARE_BRACKET)
+                        emitACharacterToken(RIGHT_SQUARE_BRACKET)
+                        reconsumeIn(TokenizationState.CDATASectionState)
+                    }
                 }
                 TokenizationState.CharacterReferenceState -> {
                     temporaryBuffer = ""
@@ -1490,7 +1517,7 @@ internal class Tokenizer(document: String) {
 
                     if (consumedCharacter.isAsciiAlphaNumeric()) {
                         reconsumeIn(TokenizationState.NamedCharacterReferenceState)
-                    } else if (consumedCharacter.matches('#')) {
+                    } else if (consumedCharacter.matches(NUMBER_SIGN)) {
                         temporaryBuffer += consumedCharacter.character
                         switchTo(TokenizationState.NumericCharacterReferenceState)
                     } else {
@@ -1630,6 +1657,7 @@ internal class Tokenizer(document: String) {
                 }
                 TokenizationState.NumericCharacterReferenceEndState -> {
                     checkCharacterReferenceCode()
+
                     temporaryBuffer = ""
                     temporaryBuffer += Char(characterReferenceCode)
                     flushCodePointsConsumedAsACharacterReference()
@@ -1704,6 +1732,7 @@ internal class Tokenizer(document: String) {
     }
 
     private fun checkCharacterReferenceCode() {
+        //FIXME: check all cases
         if (characterReferenceCode == NULL_CHARACTER.code) {
             parseError(
                 "null-character-reference",
@@ -1786,21 +1815,6 @@ internal class Tokenizer(document: String) {
         }
 
         this.state = state
-    }
-
-    private fun unhandledCase(state: TokenizationState, unhandledCharacter: InputCharacter = InputCharacter()) {
-        unhandledCase(state, unhandledCharacter.character)
-    }
-
-    private fun unhandledCase(state: TokenizationState, unhandledCharacter: Char) {
-        // There's probably a more spec-compliant way to deal with unexpected cases.
-        // For now though, dump whatever we were working on and emit an EndOfFile to break the endless loop and note where things went wrong
-        println("Unhandled case in $state: $unhandledCharacter")
-        println("Droppped token: $currentToken")
-        println("Not tokenized: " + String(inputStream.readNBytes(100)) + "(...)")
-        println("Additionally, we found the following parse errors$parseErrors")
-
-        emitEndOfFileToken()
     }
 
     private fun emitCurrentToken() {
