@@ -3,6 +3,7 @@ package org.example.gui
 import org.example.layout.LayoutEngine
 import org.example.network.NetworkFetcher
 import java.awt.BorderLayout
+import java.awt.FlowLayout
 import javax.swing.*
 
 class BrowserWindow : JFrame("Browser") {
@@ -15,33 +16,55 @@ class BrowserWindow : JFrame("Browser") {
 
         val addresseBar = JTextField("Where do you want to go?")
 
-        val textArea = JTextArea("")
-        val scrollableWrapper = JScrollPane(textArea)
+        val content = JPanel()
+        content.layout = FlowLayout()
+        val scrollableWrapper = JScrollPane(content)
 
-        //TODO: insert a proper Go-button which does rendering
         val goButton = JButton("Go")
         goButton.addActionListener {
             val address = addresseBar.text
             val response = network.getRequest(address)
-            textArea.text = renderEngine.render(response)
-            textArea.caretPosition = 0 // Scroll to top
+
+            val renderHacky = renderEngine.renderHacky(response)
+            replaceContent(content, renderHacky)
         }
+
+        val rawStringButton = JButton("Raw string")
+        rawStringButton.addActionListener {
+            val address = addresseBar.text
+            val response = network.getRequest(address)
+            val textArea = JTextArea(renderEngine.renderAsString(response))
+            textArea.caretPosition = 0 // Scroll to top
+
+            replaceContent(content, textArea)
+        }
+
         val debugButton = JButton("Debug")
         debugButton.addActionListener {
             val address = addresseBar.text
             val response = network.getRequest(address)
-            textArea.text = renderEngine.debug(response)
+            val textArea = JTextArea(renderEngine.debug(response))
             textArea.caretPosition = 0 // Scroll to top
+
+            replaceContent(content, textArea)
         }
 
         val chrome = JPanel()
         chrome.add(addresseBar)
         chrome.add(goButton)
+        chrome.add(rawStringButton)
         chrome.add(debugButton)
 
         val pane = this.contentPane
         pane.add(chrome, BorderLayout.NORTH)
         pane.add(scrollableWrapper, BorderLayout.CENTER)
         this.isVisible = true
+    }
+
+    private fun replaceContent(contentWrapper: JPanel, newContent: JComponent) {
+        contentWrapper.removeAll()
+        contentWrapper.add(newContent)
+        contentWrapper.revalidate()
+        contentWrapper.repaint()
     }
 }

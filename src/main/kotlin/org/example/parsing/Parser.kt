@@ -1097,6 +1097,9 @@ class Parser(document: String) {
             "script" -> {
                 return HTMLScriptElementImpl()
             }
+            "style" -> {
+                return HTMLStyleElementImpl()
+            }
             "table" -> {
                 return HTMLTableElementImpl()
             }

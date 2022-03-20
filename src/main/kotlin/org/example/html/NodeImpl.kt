@@ -1,6 +1,7 @@
 package org.example.html
 
 import org.w3c.dom.*
+import org.w3c.dom.DOMException.NOT_FOUND_ERR
 
 open class NodeImpl(private val nodeName: String) : Node {
     private val childNodes: MutableList<Node> = mutableListOf()
@@ -30,11 +31,11 @@ open class NodeImpl(private val nodeName: String) : Node {
     }
 
     override fun getFirstChild(): Node {
-        TODO("Not yet implemented")
+        return childNodes.first()
     }
 
     override fun getLastChild(): Node {
-        TODO("Not yet implemented")
+        return childNodes.last()
     }
 
     override fun getPreviousSibling(): Node {
@@ -62,7 +63,12 @@ open class NodeImpl(private val nodeName: String) : Node {
     }
 
     override fun removeChild(oldChild: Node?): Node {
-        TODO("Not yet implemented")
+        if (oldChild is Node) {
+            childNodes.remove(oldChild)
+            return oldChild
+        }
+
+        throw DOMException(NOT_FOUND_ERR, "Could not find matching child node")
     }
 
     override fun appendChild(newChild: Node): Node {
@@ -71,7 +77,7 @@ open class NodeImpl(private val nodeName: String) : Node {
     }
 
     override fun hasChildNodes(): Boolean {
-        TODO("Not yet implemented")
+        return childNodes.isNotEmpty()
     }
 
     override fun cloneNode(deep: Boolean): Node {

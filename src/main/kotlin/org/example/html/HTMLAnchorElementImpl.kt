@@ -28,11 +28,11 @@ class HTMLAnchorElementImpl : HTMLAnchorElement, HTMLElementImpl("a") {
     }
 
     override fun getHref(): String {
-        TODO("Not yet implemented")
+        return getAttribute("href")
     }
 
     override fun setHref(href: String?) {
-        TODO("Not yet implemented")
+        setAttribute("href", href)
     }
 
     override fun getHreflang(): String {
